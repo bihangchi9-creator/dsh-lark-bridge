@@ -6,8 +6,6 @@
 
 在飞书里发一条消息，一个真正的 dsh 智能体（带自己的工具、自己的项目目录、自己的持久对话）就在群里回你。每个群聊都是一个隔离的工作区，所以团队可以并行跑多个项目，一个群一个。
 
-> 本项目是在 [zarazhangrui](https://github.com/zarazhangrui) 的 [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge) 以及 [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark) 的思路之上做的**二创**。它是**从零重写的 dsh 原生插件**，而非对上游源码的 fork。详见 [致谢](#致谢)。
-
 ---
 
 ## 它能做什么

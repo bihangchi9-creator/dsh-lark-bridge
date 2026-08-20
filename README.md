@@ -6,8 +6,6 @@
 
 Send a message in a Feishu chat, and a real dsh agent — with its own tools, its own project directory, and its own persistent conversation — answers you right there. Each group chat is an isolated workspace, so a team can run several projects in parallel, one per group.
 
-> This project is a creative extension (二创) built on the flow of [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge) by [zarazhangrui](https://github.com/zarazhangrui) and [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark). It is a **from-scratch reimplementation as a native dsh plugin**, not a fork of the upstream source. See [Credits](#credits).
-
 ---
 
 ## What it does
