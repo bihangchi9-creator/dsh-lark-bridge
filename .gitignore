@@ -1,0 +1,21 @@
+node_modules/
+lib/
+dist/
+coverage/
+
+*.log
+*.tsbuildinfo
+
+# Local credentials & registration artifacts — never commit these
+.dsh-lark-bridge/
+credentials.json
+register-url.txt
+
+.env
+.env.local
+.env.*.local
+.npmrc
+
+.DS_Store
+.idea/
+.vscode/

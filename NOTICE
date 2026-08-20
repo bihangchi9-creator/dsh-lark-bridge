@@ -1,0 +1,29 @@
+dsh-lark-bridge
+================
+
+A native DeepSeek Harness (dsh) plugin that bridges dsh coding agents to
+Feishu / Lark group chats — one group, one project directory.
+
+This project is a creative extension (二创) built on the ideas and flow of two
+earlier projects. It is a from-scratch reimplementation as a native dsh plugin
+(cordis service), not a copy of the upstream source, but it reuses their
+concept, UX, and the QR self-registration flow.
+
+Lineage
+-------
+
+Direct upstream:
+- trae-to-lark — Author: bihangchi
+  https://github.com/bihangchi9-creator/trae-to-lark
+  Adds TRAE CLI as a first-class agent; the design this project builds on.
+
+Original concept:
+- lark-coding-agent-bridge (feishu-claude-code-bridge) — Author: zarazhangrui
+  The original "chat with a local coding agent from Feishu" project.
+
+dsh-lark-bridge (this project) is a native DeepSeek Harness plugin
+reimplementation by bihangchi, driving dsh agents directly through the host's
+`agents` service.
+
+All parts are distributed under the MIT License; see LICENSE for the full
+copyright chain.
