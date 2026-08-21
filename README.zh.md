@@ -46,17 +46,22 @@
 ```bash
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
 cd dsh-lark-bridge
-pnpm setup            # 或: bash scripts/setup.sh（默认注册到 web profile）
+pnpm setup            # macOS / Linux（脚本: scripts/setup.sh）
+pnpm setup:win        # Windows（脚本: scripts/setup.ps1）
 ```
 
 脚本会：预检 Node 版本 → 构建插件 → 把插件链接进 dsh profile → **注册为 bundle**。
 之后直接启动即可，**不需要 `--patch` 参数**：
 
 ```bash
+# macOS / Linux
 DSH_PERMISSION_MODE=danger-full-access dsh web
+
+# Windows PowerShell
+$env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 ```
 
-> 换 profile：`DSH_PROFILE=headless pnpm setup`；自定义 dsh 目录：`DSH_HOME=/path/.dsh pnpm setup`。
+> 换 profile：`DSH_PROFILE=headless pnpm setup`；自定义 dsh 目录：`DSH_HOME=/path/.dsh pnpm setup`（Windows 同样支持这两个环境变量）。
 
 ### 方式二：手动安装（源码模式）
 
@@ -74,8 +79,11 @@ pnpm build            # 把 src/ 编译到 lib/
 
 ```bash
 # 2. 链接进 profile 的 node_modules（bundle 解析锚点）
+#    macOS / Linux：
 mkdir -p ~/.dsh/profiles/web/node_modules
 ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-lark-bridge
+#    Windows PowerShell（目录联接，无需管理员权限）：
+#    New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\web\node_modules\dsh-lark-bridge" -Target (Get-Location).Path
 
 # 3. 在 ~/.dsh/profiles/web/package.json 的 dsh.profile.bundles 末尾加上包名：
 #    "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-lark-bridge"]
@@ -89,6 +97,20 @@ DSH_PERMISSION_MODE=danger-full-access dsh web
 ```
 
 > `DSH_PERMISSION_MODE=danger-full-access` 会把智能体的审批策略设为 `never`。这是必需的，因为飞书用户没法点本地的审批弹窗。**请只在你信任的环境里使用。**
+
+## 平台差异速查（Windows vs macOS/Linux）
+
+| 事项 | macOS / Linux | Windows |
+|---|---|---|
+| 一键安装 | `pnpm setup`（`scripts/setup.sh`） | `pnpm setup:win`（`scripts/setup.ps1`） |
+| dsh 主目录 | `~/.dsh`（即 `$HOME/.dsh`） | `%USERPROFILE%\.dsh` |
+| 目录链接 | `ln -s`（符号链接） | `New-Item -ItemType Junction`（目录联接，**无需管理员权限**） |
+| 环境变量写法 | `DSH_PERMISSION_MODE=danger-full-access dsh web` | PowerShell：`$env:DSH_PERMISSION_MODE="danger-full-access"; dsh web`；cmd：`set DSH_PERMISSION_MODE=danger-full-access && dsh web` |
+| 注册链接文件 | `~/.dsh-lark-bridge/register-url.txt` | `%USERPROFILE%\.dsh-lark-bridge\register-url.txt` |
+| 后台常驻 | `launchd`（macOS）/ `systemd`（Linux） | 任务计划程序（`schtasks`） |
+| 扫码注册 / 构建 / 聊天命令 | 全平台一致 | 同左 |
+
+> 两个安装脚本行为完全一致且幂等：预检 → 构建 → 链接 → 注册 bundle。
 
 ## 首次运行：注册你的机器人
 

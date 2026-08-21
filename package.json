@@ -20,14 +20,16 @@
     "lib/**/*.js",
     "lib/**/*.d.ts",
     "cordis.patch.yml",
-    "scripts/setup.sh"
+    "scripts/setup.sh",
+    "scripts/setup.ps1"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "dev": "tsc -p tsconfig.json --watch",
     "register": "node lib/register-cli.js",
-    "setup": "bash scripts/setup.sh"
+    "setup": "bash scripts/setup.sh",
+    "setup:win": "powershell -ExecutionPolicy Bypass -File scripts/setup.ps1"
   },
   "keywords": [
     "dsh",

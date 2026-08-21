@@ -46,7 +46,8 @@ The bot **registration lives entirely on Feishu**, not in dsh. dsh only *loads t
 ```bash
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
 cd dsh-lark-bridge
-pnpm setup            # or: bash scripts/setup.sh (registers into the `web` profile by default)
+pnpm setup            # macOS / Linux (scripts/setup.sh)
+pnpm setup:win        # Windows (scripts/setup.ps1)
 ```
 
 The script preflights your Node version, builds the plugin, links it into the
@@ -54,10 +55,14 @@ dsh profile, and **registers it as a bundle**. After that, launch dsh directly �
 **no `--patch` flag needed**:
 
 ```bash
+# macOS / Linux
 DSH_PERMISSION_MODE=danger-full-access dsh web
+
+# Windows PowerShell
+$env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 ```
 
-> Different profile: `DSH_PROFILE=headless pnpm setup`; custom dsh home: `DSH_HOME=/path/.dsh pnpm setup`.
+> Different profile: `DSH_PROFILE=headless pnpm setup`; custom dsh home: `DSH_HOME=/path/.dsh pnpm setup` (both env vars work on Windows too).
 
 ### Option 2: manual install (source mode)
 
@@ -75,8 +80,11 @@ Then register it as a dsh **bundle** (once it's in the profile, `dsh web` loads 
 
 ```bash
 # 2. Link it into the profile's node_modules (bundle resolution anchor)
+#    macOS / Linux:
 mkdir -p ~/.dsh/profiles/web/node_modules
 ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-lark-bridge
+#    Windows PowerShell (directory junction — no admin rights needed):
+#    New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\web\node_modules\dsh-lark-bridge" -Target (Get-Location).Path
 
 # 3. Append the package name to dsh.profile.bundles in ~/.dsh/profiles/web/package.json:
 #    "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-lark-bridge"]
@@ -90,6 +98,20 @@ DSH_PERMISSION_MODE=danger-full-access dsh web
 ```
 
 > `DSH_PERMISSION_MODE=danger-full-access` makes the agent's approval policy `never`. This is needed because Feishu users cannot click through a local approval prompt. Only use it in an environment you trust.
+
+## Platform notes (Windows vs macOS/Linux)
+
+| Item | macOS / Linux | Windows |
+|---|---|---|
+| One-command setup | `pnpm setup` (`scripts/setup.sh`) | `pnpm setup:win` (`scripts/setup.ps1`) |
+| dsh home directory | `~/.dsh` (i.e. `$HOME/.dsh`) | `%USERPROFILE%\.dsh` |
+| Directory link | `ln -s` (symlink) | `New-Item -ItemType Junction` (junction — **no admin rights needed**) |
+| Env var syntax | `DSH_PERMISSION_MODE=danger-full-access dsh web` | PowerShell: `$env:DSH_PERMISSION_MODE="danger-full-access"; dsh web`; cmd: `set DSH_PERMISSION_MODE=danger-full-access && dsh web` |
+| Registration URL file | `~/.dsh-lark-bridge/register-url.txt` | `%USERPROFILE%\.dsh-lark-bridge\register-url.txt` |
+| Run as a background service | `launchd` (macOS) / `systemd` (Linux) | Task Scheduler (`schtasks`) |
+| QR registration / build / chat commands | identical everywhere | identical everywhere |
+
+> The two setup scripts behave identically and are idempotent: preflight → build → link → register bundle.
 
 ## First run: register your bot
 
