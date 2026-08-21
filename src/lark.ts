@@ -26,6 +26,12 @@ const STREAM_FLUSH_MS = 500
 /** How often the app owner is re-resolved from the app-info API. */
 const OWNER_REFRESH_MS = 30 * 60 * 1000
 
+/** Max queued messages per chat while a turn is running (beyond: dropped loudly). */
+const MAX_PENDING_PER_CHAT = 10
+
+/** Conservative per-message length cap; longer replies are split at newlines. */
+const MAX_REPLY_CHARS = 8000
+
 /** Per-chat model override, chosen via `/model <name>`. */
 type ChatModels = Map<string, string>
 
@@ -36,8 +42,10 @@ type ChatModels = Map<string, string>
 export class LarkBridge {
   private readonly channel: LarkChannel
   private readonly chatModels: ChatModels = new Map()
-  /** Chats with a run currently in flight — a simple one-run-per-chat guard. */
+  /** Chats with a run currently in flight — one run per chat at a time. */
   private readonly busy = new Set<string>()
+  /** Per-chat FIFO of messages that arrived while a turn was running. */
+  private readonly pending = new Map<string, NormalizedMessage[]>()
   /**
    * open_id of the app owner. Seeded from the credentials captured at
    * registration; when absent, resolved at runtime via the app-info API and
@@ -206,24 +214,45 @@ export class LarkBridge {
     }
   }
 
-  /** Feed a prompt to the chat's agent and stream the reply back. */
+  /** Feed a prompt to the chat's agent, queueing if a turn is already running. */
   private async runAgent(msg: NormalizedMessage, prompt: string): Promise<void> {
     const chatId = msg.chatId
     if (this.busy.has(chatId)) {
-      await this.reply(msg, '⏳ Still working on the previous message — please wait.')
+      // P2: don't drop — queue per chat, process after the current turn.
+      const queue = this.pending.get(chatId) ?? []
+      if (queue.length >= MAX_PENDING_PER_CHAT) {
+        await this.reply(msg, `📥 队列已满（${MAX_PENDING_PER_CHAT} 条），这条没有入队。`)
+        return
+      }
+      queue.push(msg)
+      this.pending.set(chatId, queue)
+      await this.reply(msg, '📥 收到，前一条还在处理中，我会接着处理这条。')
       return
     }
+    await this.runTurn(msg, prompt)
+  }
+
+  /** Run one turn for a chat, then drain the chat's pending queue. */
+  private async runTurn(msg: NormalizedMessage, prompt: string): Promise<void> {
+    const chatId = msg.chatId
     this.busy.add(chatId)
     try {
       await this.runAgentTurn(msg, prompt, chatId)
     } catch (err) {
       // ensureSession (or any setup step before the stream) can reject; without
       // this the chat's busy flag would stay set forever and every later message
-      // would get "Still working…". Release it here and surface the failure.
+      // would get queued behind a dead turn. Release it here and surface it.
       this.log('error', 'agent turn failed', err)
       await this.reply(msg, `⚠️ Failed to produce a reply: ${String(err)}`)
     } finally {
       this.busy.delete(chatId)
+      const queue = this.pending.get(chatId)
+      const next = queue?.shift()
+      if (queue && queue.length === 0) this.pending.delete(chatId)
+      if (next) {
+        const text = next.content?.trim() ?? ''
+        if (text.length > 0) void this.runTurn(next, text)
+      }
     }
   }
 
@@ -298,13 +327,20 @@ export class LarkBridge {
               shown = buffer
             }
           }
-          // Final flush.
+          // Final flush. P2: long replies are split at newline boundaries so
+          // the streaming card shows the first chunk and the rest arrives as
+          // follow-up messages — a truncated reply is a failed deliverable.
           const finalText = errored
             ? `⚠️ ${errored}`
             : buffer.length > 0
               ? buffer
               : '(no output)'
-          if (finalText !== shown) await controller.setContent(finalText)
+          const chunks = splitLongText(finalText, MAX_REPLY_CHARS)
+          const first = chunks[0] ?? ''
+          if (first !== shown) await controller.setContent(first)
+          for (const extra of chunks.slice(1)) {
+            await this.channel.send(chatId, { markdown: extra }, { replyTo: msg.messageId })
+          }
         },
       },
       { replyTo: msg.messageId },
@@ -340,4 +376,39 @@ function deniedMessage(msg: NormalizedMessage): string {
 /** Promise-based delay. */
 function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+/**
+ * Split text longer than `max` chars into chunks, cutting at newline
+ * boundaries and keeping markdown code fences valid across chunks. Each
+ * processed chunk that ends inside an open fence closes it (```` ``` ````) and
+ * the next chunk reopens it, so every chunk is self-contained and the whole
+ * result is balanced. Returns `[text]` unchanged when the text fits.
+ */
+export function splitLongText(text: string, max: number): string[] {
+  if (text.length <= max) return [text]
+  const chunks: string[] = []
+  let rest = text
+  // Whether the previous chunk closed a fence, so this chunk must reopen it.
+  let reopen = false
+  while (rest.length > max) {
+    let cut = rest.lastIndexOf('\n', max)
+    if (cut <= 0) cut = max
+    let chunk = rest.slice(0, cut)
+    rest = rest.slice(cut)
+    if (reopen) chunk = '```\n' + chunk
+    const markers = (chunk.match(/```/g) ?? []).length
+    if (markers % 2 === 1) {
+      chunk += '\n```'
+      reopen = true
+    } else {
+      reopen = false
+    }
+    chunks.push(chunk)
+  }
+  // The final chunk needs the same fence treatment.
+  if (reopen) rest = '```\n' + rest
+  if (((rest.match(/```/g) ?? []).length) % 2 === 1) rest += '\n```'
+  chunks.push(rest)
+  return chunks
 }
