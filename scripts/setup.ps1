@@ -69,7 +69,11 @@ if (-not (Test-Path $ProfileDir)) {
     exit 1
 }
 
-# 4. Junction-link the plugin into the profile's node_modules
+# 4. Link the plugin into the profile's node_modules.
+#    Windows: directory junction (no admin rights needed).
+#    macOS/Linux (pwsh): symbolic link — `-ItemType Junction` is a silent
+#    no-op on Unix, so branch on the OS explicitly.
+$IsWindowsOs = $env:OS -eq 'Windows_NT'
 $ModulesDir = Split-Path $Link
 New-Item -ItemType Directory -Force -Path $ModulesDir | Out-Null
 if (Test-Path $Link) {
@@ -83,7 +87,17 @@ if (Test-Path $Link) {
     }
 }
 else {
-    New-Item -ItemType Junction -Path $Link -Target $ProjectDir | Out-Null
+    if ($IsWindowsOs) {
+        New-Item -ItemType Junction -Path $Link -Target $ProjectDir | Out-Null
+    }
+    else {
+        New-Item -ItemType SymbolicLink -Path $Link -Target $ProjectDir | Out-Null
+    }
+    # Verify the link actually landed — Unix junctions fail silently otherwise.
+    if (-not (Test-Path $Link)) {
+        Write-Error "link creation failed for $Link"
+        exit 1
+    }
     Write-Host "==> linked $Link -> $ProjectDir"
 }
 
