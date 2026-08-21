@@ -12,9 +12,10 @@ Send a message in a Feishu chat, and a real dsh agent — with its own tools, it
 
 - **Feishu ⇄ dsh agent.** Inbound Feishu messages drive a live dsh agent through the host's `agents` service; the reply streams back onto a live-updating Feishu message.
 - **One group, one project folder.** Every chat id maps to a stable directory (`<workspaceRoot>/<chatId>`), created on first use. Different groups never touch each other's files.
-- **Persistent per-chat sessions.** A chat's conversation survives restarts (resume-or-create on a fixed per-chat session id).
+- **Persistent per-chat sessions.** A chat's conversation survives restarts (policy-fingerprint-gated resume-or-create; `/new` really clears it).
+- **Images & files.** Just send them to the bot — the bridge downloads them into the chat's `.attachments/` folder and hands the paths to the agent (images via `read_image`). Limits: 5 attachments per message, images ≤10 MB, files ≤20 MB (over-limit attachments are rejected loudly); file names are sanitized; files older than 7 days are swept.
 - **Zero-config setup.** On first launch, if no credentials exist, the plugin auto-runs a QR registration wizard — scan it in the Feishu app and it connects automatically. No portal spelunking.
-- **Slash commands.** `/help`, `/new`, `/where`, `/model` manage each chat locally.
+- **Slash commands.** `/help`, `/new`, `/where`, `/model`, `/whoami` manage each chat locally; the owner can authorize/revoke a group in-chat with `/allow` and `/disallow`.
 
 ## Architecture in one picture
 

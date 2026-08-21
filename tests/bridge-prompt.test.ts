@@ -59,6 +59,21 @@ describe('buildBridgePrompt', () => {
     const out = buildBridgePrompt('a<b>&c', ctx)
     expect(out).toContain('a\\u003cb\\u003e\\u0026c')
   })
+
+  it('includes downloaded attachments in the user block', () => {
+    const out = buildBridgePrompt(
+      '看图',
+      ctx,
+      [{ path: '/w/.attachments/photo.png', type: 'image', fileName: 'photo.png' }],
+    )
+    expect(out).toContain('"attachments"')
+    expect(out).toContain('"path":"/w/.attachments/photo.png"')
+    expect(out).toContain('"type":"image"')
+  })
+
+  it('omits the attachments field when none were downloaded', () => {
+    expect(buildBridgePrompt('hi', ctx)).not.toContain('attachments')
+  })
 })
 
 describe('BRIDGE_SYSTEM_PROMPT', () => {

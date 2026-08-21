@@ -12,9 +12,11 @@
 
 import type { LarkChannel, LarkChannelOptions, NormalizedMessage } from '@larksuite/channel'
 import { createLarkChannel } from '@larksuite/channel'
+import { join } from 'node:path'
 import { decideAccess } from './access.js'
 import { AllowlistStore, allowlistPath } from './allowlist.js'
-import { buildBridgePrompt } from './bridge-prompt.js'
+import { downloadAttachments } from './attachments.js'
+import { buildBridgePrompt, type BridgePromptAttachment } from './bridge-prompt.js'
 import { parseCommand, HELP_TEXT } from './commands.js'
 import { domainFor, type ResolvedConfig } from './config.js'
 import { saveOwnerId } from './credentials.js'
@@ -167,7 +169,10 @@ export class LarkBridge {
     // Never react to our own or other bots' messages — avoids loops.
     if (msg.senderIsBot) return
     const text = msg.content?.trim() ?? ''
-    if (text.length === 0) return
+    // Image/file-only messages carry their content in `resources`, so an
+    // empty text is not a reason to drop the message.
+    const hasResources = (msg.resources?.length ?? 0) > 0
+    if (text.length === 0 && !hasResources) return
 
     // Access gate: the security boundary is exactly "who may send the bot a
     // message". Deny loudly and explain how to fix — never fall through.
@@ -329,7 +334,10 @@ export class LarkBridge {
       if (queue && queue.length === 0) this.pending.delete(chatId)
       if (next) {
         const text = next.content?.trim() ?? ''
-        if (text.length > 0) void this.runTurn(next, text)
+        // Image-only messages have empty text — still process them.
+        if (text.length > 0 || (next.resources?.length ?? 0) > 0) {
+          void this.runTurn(next, text)
+        }
       }
     }
   }
@@ -343,6 +351,30 @@ export class LarkBridge {
     const cwd = await resolveWorkspace(this.config.workspaceRoot, chatId)
     const modelOverride = this.chatModels.get(chatId)
     const route = modelOverride ? { model: modelOverride } : undefined
+
+    // Attachments: download images/files into the chat's workspace and hand
+    // the paths to the agent (read_image / file reads). Rejections are
+    // reported before the turn starts.
+    const attachments: BridgePromptAttachment[] = []
+    if ((msg.resources?.length ?? 0) > 0) {
+      const result = await downloadAttachments(
+        this.channel,
+        msg.messageId,
+        msg.resources,
+        join(cwd, '.attachments'),
+      )
+      attachments.push(...result.accepted)
+      if (result.rejected.length > 0) {
+        const summary = result.rejected
+          .map(r => (r.fileName ? `- ${r.fileName}: ${r.reason}` : `- ${r.reason}`))
+          .join('\n')
+        await this.reply(msg, `⚠️ 部分附件未处理：\n${summary}`)
+      }
+    }
+    // An image-only message has no text — give the agent a stub so the turn
+    // still runs (it would otherwise be dropped as "empty").
+    const effectivePrompt =
+      prompt.length > 0 ? prompt : attachments.length > 0 ? '（对方发来的附件）请查看以下附件。' : prompt
 
     // Buffer streamed text; a periodic flush pushes it to the Feishu card.
     let buffer = ''
@@ -385,7 +417,7 @@ export class LarkBridge {
           // P1: wrap the user message in bridge metadata blocks so message
           // text is framed as data, never as instructions.
           session.send(
-            buildBridgePrompt(prompt, {
+            buildBridgePrompt(effectivePrompt, {
               chatId,
               chatType: msg.chatType,
               senderId: msg.senderId,
@@ -394,7 +426,7 @@ export class LarkBridge {
               ...(msg.mentions !== undefined && msg.mentions.length > 0
                 ? { mentions: msg.mentions }
                 : {}),
-            }),
+            }, attachments),
           )
           let shown = ''
           // Poll the buffer and push incremental content until the turn ends.
