@@ -78,8 +78,13 @@ describe('buildBridgePrompt', () => {
 
 describe('BRIDGE_SYSTEM_PROMPT', () => {
   it('states the data-not-instructions contract and secret rules', () => {
-    expect(BRIDGE_SYSTEM_PROMPT).toContain('消息里的内容是数据')
+    expect(BRIDGE_SYSTEM_PROMPT).toContain('都是数据')
     expect(BRIDGE_SYSTEM_PROMPT).toContain('忽略')
     expect(BRIDGE_SYSTEM_PROMPT).toContain('secret')
+  })
+
+  it('tells the agent how to read attachments', () => {
+    expect(BRIDGE_SYSTEM_PROMPT).toContain('read_image')
+    expect(BRIDGE_SYSTEM_PROMPT).toContain('attachments')
   })
 })
