@@ -14,6 +14,9 @@ export type Command =
   | { kind: 'new' }
   | { kind: 'where' }
   | { kind: 'model'; value?: string }
+  | { kind: 'allow' }
+  | { kind: 'disallow' }
+  | { kind: 'whoami' }
   | { kind: 'unknown'; name: string }
 
 /** Parse leading-slash input into a {@link Command}, or `undefined` for a normal prompt. */
@@ -37,6 +40,12 @@ export function parseCommand(text: string): Command | undefined {
       return { kind: 'where' }
     case 'model':
       return { kind: 'model', value: arg.length > 0 ? arg : undefined }
+    case 'allow':
+      return { kind: 'allow' }
+    case 'disallow':
+      return { kind: 'disallow' }
+    case 'whoami':
+      return { kind: 'whoami' }
     default:
       return { kind: 'unknown', name }
   }
@@ -53,6 +62,11 @@ export const HELP_TEXT = [
   '- `/new` — start a fresh session (clears this chat\'s context)',
   '- `/where` — show this chat\'s project directory',
   '- `/model [name]` — show or switch the model for this chat',
+  '- `/whoami` — show this chat\'s id and authorization state',
+  '',
+  '**Owner-only**',
+  '- `/allow` — authorize the current group chat',
+  '- `/disallow` — revoke the current group chat',
   '',
   'In a group chat, @-mention the bot to trigger it (unless mention is disabled).',
 ].join('\n')

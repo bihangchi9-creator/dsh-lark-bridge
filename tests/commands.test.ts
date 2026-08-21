@@ -37,6 +37,12 @@ describe('parseCommand', () => {
     })
   })
 
+  it('parses owner admin commands', () => {
+    expect(parseCommand('/allow')).toEqual({ kind: 'allow' })
+    expect(parseCommand('/disallow')).toEqual({ kind: 'disallow' })
+    expect(parseCommand('/whoami')).toEqual({ kind: 'whoami' })
+  })
+
   it('flags unknown commands with their name', () => {
     expect(parseCommand('/frobnicate x')).toEqual({ kind: 'unknown', name: 'frobnicate' })
   })

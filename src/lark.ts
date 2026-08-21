@@ -13,6 +13,7 @@
 import type { LarkChannel, LarkChannelOptions, NormalizedMessage } from '@larksuite/channel'
 import { createLarkChannel } from '@larksuite/channel'
 import { decideAccess } from './access.js'
+import { AllowlistStore, allowlistPath } from './allowlist.js'
 import { buildBridgePrompt } from './bridge-prompt.js'
 import { parseCommand, HELP_TEXT } from './commands.js'
 import { domainFor, type ResolvedConfig } from './config.js'
@@ -55,6 +56,8 @@ export class LarkBridge {
   /** This bot's own open_id, resolved from the channel identity. */
   private botOpenId: string | undefined
   private ownerRefreshTimer: ReturnType<typeof setInterval> | undefined
+  /** Command-managed chat allowlist (owner `/allow` / `/disallow`). */
+  private readonly allowlist: AllowlistStore
 
   constructor(
     private readonly config: ResolvedConfig,
@@ -75,6 +78,25 @@ export class LarkBridge {
     }
     this.channel = createLarkChannel(opts)
     this.ownerId = config.ownerId
+    this.allowlist = new AllowlistStore(allowlistPath())
+  }
+
+  /** The effective access controls: config/env allowlists + command-managed store. */
+  private accessControls(): {
+    ownerId: string | undefined
+    allowedChats: string[]
+    allowedUsers: string[]
+  } {
+    return {
+      ownerId: this.ownerId,
+      allowedChats: [...this.config.allowedChats, ...this.allowlist.chatIds()],
+      allowedUsers: this.config.allowedUsers,
+    }
+  }
+
+  /** Whether the sender is the app owner (admin commands). Fail-closed when unknown. */
+  private isOwner(msg: NormalizedMessage): boolean {
+    return this.ownerId !== undefined && msg.senderId === this.ownerId
   }
 
   /** Connect the WebSocket and start handling messages. */
@@ -149,14 +171,11 @@ export class LarkBridge {
 
     // Access gate: the security boundary is exactly "who may send the bot a
     // message". Deny loudly and explain how to fix — never fall through.
-    const decision = decideAccess(
-      {
-        ownerId: this.ownerId,
-        allowedChats: this.config.allowedChats,
-        allowedUsers: this.config.allowedUsers,
-      },
-      { chatId: msg.chatId, chatType: msg.chatType, senderId: msg.senderId },
-    )
+    const decision = decideAccess(this.accessControls(), {
+      chatId: msg.chatId,
+      chatType: msg.chatType,
+      senderId: msg.senderId,
+    })
     if (!decision.ok) {
       this.log('warn', 'access denied', {
         chatId: msg.chatId,
@@ -197,6 +216,62 @@ export class LarkBridge {
       case 'where': {
         const dir = await resolveWorkspace(this.config.workspaceRoot, msg.chatId)
         await this.reply(msg, `📁 This chat's project directory:\n\`${dir}\``)
+        return
+      }
+      case 'allow': {
+        if (msg.chatType !== 'group') {
+          await this.reply(msg, 'ℹ️ `/allow` 用于授权群聊。私聊授权请 owner 配置 `DSH_LARK_ALLOWED_USERS`。')
+          return
+        }
+        if (!this.isOwner(msg)) {
+          await this.reply(msg, '🔒 只有机器人 owner 可以授权群聊。')
+          return
+        }
+        const added = this.allowlist.addChat(msg.chatId)
+        await this.reply(
+          msg,
+          added
+            ? `✅ 本群已授权（\`${msg.chatId}\`），立即生效。`
+            : `ℹ️ 本群已在授权列表中。`,
+        )
+        return
+      }
+      case 'disallow': {
+        if (msg.chatType !== 'group') {
+          await this.reply(msg, 'ℹ️ `/disallow` 用于撤销群聊授权。')
+          return
+        }
+        if (!this.isOwner(msg)) {
+          await this.reply(msg, '🔒 只有机器人 owner 可以撤销授权。')
+          return
+        }
+        if (this.config.allowedChats.includes(msg.chatId)) {
+          await this.reply(
+            msg,
+            'ℹ️ 本群来自环境变量 `DSH_LARK_ALLOWED_CHATS`，命令无法覆盖——请从环境变量中移除。',
+          )
+          return
+        }
+        const removed = this.allowlist.removeChat(msg.chatId)
+        await this.reply(msg, removed ? '✅ 已撤销本群授权。' : 'ℹ️ 本群本就不在授权列表中。')
+        return
+      }
+      case 'whoami': {
+        const inEnv = this.config.allowedChats.includes(msg.chatId)
+        const inStore = this.allowlist.hasChat(msg.chatId)
+        const chatStatus = inEnv || inStore
+          ? `✅ 已授权（${inEnv ? '环境变量' : '命令授权'}）`
+          : '🔒 未授权'
+        const lines = [
+          `📋 **chatId**: \`${msg.chatId}\``,
+          `聊天类型: ${msg.chatType === 'p2p' ? '私聊' : '群聊'}`,
+          `本聊天授权状态: ${chatStatus}`,
+        ]
+        if (msg.chatType === 'p2p') {
+          const dm = this.config.allowedUsers.includes(msg.senderId)
+          lines.push(`你的私聊授权: ${dm ? '✅ 已授权' : '🔒 未授权（仅 owner 可用）'}`)
+        }
+        await this.reply(msg, lines.join('\n'))
         return
       }
       case 'model': {
