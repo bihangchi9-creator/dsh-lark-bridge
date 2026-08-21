@@ -13,6 +13,7 @@
 import type { LarkChannel, LarkChannelOptions, NormalizedMessage } from '@larksuite/channel'
 import { createLarkChannel } from '@larksuite/channel'
 import { decideAccess } from './access.js'
+import { buildBridgePrompt } from './bridge-prompt.js'
 import { parseCommand, HELP_TEXT } from './commands.js'
 import { domainFor, type ResolvedConfig } from './config.js'
 import { saveOwnerId } from './credentials.js'
@@ -43,6 +44,8 @@ export class LarkBridge {
    * persisted back (see {@link resolveOwner}).
    */
   private ownerId: string | undefined
+  /** This bot's own open_id, resolved from the channel identity. */
+  private botOpenId: string | undefined
   private ownerRefreshTimer: ReturnType<typeof setInterval> | undefined
 
   constructor(
@@ -78,6 +81,13 @@ export class LarkBridge {
     })
     await this.channel.connect()
     this.log('info', `dsh-lark-bridge connected (${this.config.tenant})`)
+
+    // The bot's own identity ("this id is you") for the bridge metadata.
+    try {
+      this.botOpenId = this.channel.getBotIdentity().openId
+    } catch {
+      // Identity not available yet — the metadata block simply omits it.
+    }
 
     // Resolve the owner if registration did not capture it (pre-upgrade
     // installs), then keep it fresh in case the app changes hands.
@@ -265,7 +275,20 @@ export class LarkBridge {
       chatId,
       {
         markdown: async controller => {
-          session.send(prompt)
+          // P1: wrap the user message in bridge metadata blocks so message
+          // text is framed as data, never as instructions.
+          session.send(
+            buildBridgePrompt(prompt, {
+              chatId,
+              chatType: msg.chatType,
+              senderId: msg.senderId,
+              ...(msg.senderName !== undefined ? { senderName: msg.senderName } : {}),
+              ...(this.botOpenId !== undefined ? { botOpenId: this.botOpenId } : {}),
+              ...(msg.mentions !== undefined && msg.mentions.length > 0
+                ? { mentions: msg.mentions }
+                : {}),
+            }),
+          )
           let shown = ''
           // Poll the buffer and push incremental content until the turn ends.
           while (!done) {

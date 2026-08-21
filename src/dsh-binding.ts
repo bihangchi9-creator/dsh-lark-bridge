@@ -22,6 +22,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { BRIDGE_SYSTEM_PROMPT } from './bridge-prompt.js'
 
 /**
  * A resolved model route: which provider + model (and optional reasoning
@@ -241,6 +242,24 @@ export class DshBinding {
       : routeOnly
     const setup = async (agentCtx: unknown): Promise<void> => {
       if (selection) installModelSelection(agentCtx as Context, selection)
+
+      // P1: mount the bridge protocol/security section (order -50, rendered
+      // before the persona at 0). Best-effort: a missing systemPrompt service
+      // or a duplicate registration only costs the prompt section, not the
+      // session.
+      try {
+        const systemPrompt = (
+          agentCtx as { systemPrompt?: { section(section: unknown): unknown } }
+        ).systemPrompt
+        systemPrompt?.section({
+          name: 'lark-bridge:protocol',
+          order: -50,
+          text: BRIDGE_SYSTEM_PROMPT,
+        })
+      } catch (err) {
+        this.log?.('warn', 'could not mount bridge protocol prompt section', err)
+      }
+
       if (presets) {
         try {
           await presets.mount(agentCtx, preset)
