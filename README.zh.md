@@ -41,34 +41,51 @@
 
 ## 安装
 
+### 方式一：一键安装（推荐）
+
+```bash
+git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
+cd dsh-lark-bridge
+pnpm setup            # 或: bash scripts/setup.sh（默认注册到 web profile）
+```
+
+脚本会：预检 Node 版本 → 构建插件 → 把插件链接进 dsh profile → **注册为 bundle**。
+之后直接启动即可，**不需要 `--patch` 参数**：
+
+```bash
+DSH_PERMISSION_MODE=danger-full-access dsh web
+```
+
+> 换 profile：`DSH_PROFILE=headless pnpm setup`；自定义 dsh 目录：`DSH_HOME=/path/.dsh pnpm setup`。
+
+### 方式二：手动安装（源码模式）
+
 由于 dsh 的公开 npm 依赖图还不完整，建议以「源码模式」和你的 dsh 代码库放在一起安装。
 
 ```bash
-# 1. 克隆到 dsh 代码库旁边
+# 1. 克隆到 dsh 代码库旁边，安装并构建
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
 cd dsh-lark-bridge
-
-# 2. 安装并构建
 pnpm install
 pnpm build            # 把 src/ 编译到 lib/
 ```
 
-然后让 dsh 加载它。把插件行加进你启动的 profile（或直接用自带的 patch）：
+然后把它注册成 dsh 的一个 **bundle**（装进 profile 即自动加载，无需 `--patch`）：
 
-```yaml
-# cordis.patch.yml （本包已自带）
-- insert:
-    - id: lark-bridge
-      name: dsh-lark-bridge
-      inject: [agents, sessions, agentPresets, agentDefaultModel]
+```bash
+# 2. 链接进 profile 的 node_modules（bundle 解析锚点）
+mkdir -p ~/.dsh/profiles/web/node_modules
+ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-lark-bridge
+
+# 3. 在 ~/.dsh/profiles/web/package.json 的 dsh.profile.bundles 末尾加上包名：
+#    "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-lark-bridge"]
 ```
 
-带着 patch 启动 dsh：
+启动（**裸命令即可，插件随 bundle 自动加载**）：
 
 ```bash
 # 在你的 dsh 代码库里
-DSH_PERMISSION_MODE=danger-full-access \
-  dsh web --patch /path/to/dsh-lark-bridge/cordis.patch.yml
+DSH_PERMISSION_MODE=danger-full-access dsh web
 ```
 
 > `DSH_PERMISSION_MODE=danger-full-access` 会把智能体的审批策略设为 `never`。这是必需的，因为飞书用户没法点本地的审批弹窗。**请只在你信任的环境里使用。**

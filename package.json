@@ -19,13 +19,15 @@
   "files": [
     "lib/**/*.js",
     "lib/**/*.d.ts",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "scripts/setup.sh"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
     "dev": "tsc -p tsconfig.json --watch",
-    "register": "node lib/register-cli.js"
+    "register": "node lib/register-cli.js",
+    "setup": "bash scripts/setup.sh"
   },
   "keywords": [
     "dsh",

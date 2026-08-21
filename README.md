@@ -41,34 +41,52 @@ The bot **registration lives entirely on Feishu**, not in dsh. dsh only *loads t
 
 ## Install
 
+### Option 1: one-command setup (recommended)
+
+```bash
+git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
+cd dsh-lark-bridge
+pnpm setup            # or: bash scripts/setup.sh (registers into the `web` profile by default)
+```
+
+The script preflights your Node version, builds the plugin, links it into the
+dsh profile, and **registers it as a bundle**. After that, launch dsh directly —
+**no `--patch` flag needed**:
+
+```bash
+DSH_PERMISSION_MODE=danger-full-access dsh web
+```
+
+> Different profile: `DSH_PROFILE=headless pnpm setup`; custom dsh home: `DSH_HOME=/path/.dsh pnpm setup`.
+
+### Option 2: manual install (source mode)
+
 Because the dsh public npm graph is still partial, install from source alongside your dsh checkout.
 
 ```bash
-# 1. Clone next to your dsh checkout
+# 1. Clone next to your dsh checkout; install & build
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
 cd dsh-lark-bridge
-
-# 2. Install & build
 pnpm install
 pnpm build            # compiles src/ -> lib/
 ```
 
-Then tell dsh to load it. Add the plugin row to the profile you launch (or reuse the shipped patch):
+Then register it as a dsh **bundle** (once it's in the profile, `dsh web` loads it automatically — no `--patch`):
 
-```yaml
-# cordis.patch.yml  (already provided by this package)
-- insert:
-    - id: lark-bridge
-      name: dsh-lark-bridge
-      inject: [agents, sessions, agentPresets, agentDefaultModel]
+```bash
+# 2. Link it into the profile's node_modules (bundle resolution anchor)
+mkdir -p ~/.dsh/profiles/web/node_modules
+ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-lark-bridge
+
+# 3. Append the package name to dsh.profile.bundles in ~/.dsh/profiles/web/package.json:
+#    "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-lark-bridge"]
 ```
 
-Launch dsh with the patch:
+Launch dsh (the bundle loads the plugin automatically):
 
 ```bash
 # from your dsh checkout
-DSH_PERMISSION_MODE=danger-full-access \
-  dsh web --patch /path/to/dsh-lark-bridge/cordis.patch.yml
+DSH_PERMISSION_MODE=danger-full-access dsh web
 ```
 
 > `DSH_PERMISSION_MODE=danger-full-access` makes the agent's approval policy `never`. This is needed because Feishu users cannot click through a local approval prompt. Only use it in an environment you trust.
