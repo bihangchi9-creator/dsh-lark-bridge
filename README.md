@@ -166,8 +166,38 @@ Every field can come from the plugin `config:` block **or** an environment varia
 | `workspaceRoot` | `DSH_LARK_WORKSPACE_ROOT` | `~/dsh-lark-workspaces` | Root for per-chat folders |
 | `allowDm` | `DSH_LARK_ALLOW_DM` | `true` | Respond in direct messages |
 | `requireMention` | `DSH_LARK_REQUIRE_MENTION` | `true` | In groups, require an `@`-mention |
+| `allowedChats` | `DSH_LARK_ALLOWED_CHATS` | `[]` | Chat ids allowed to use the bot (comma-separated). **Empty = no group allowed (fail-closed)** |
+| `allowedUsers` | `DSH_LARK_ALLOWED_USERS` | `[]` | User open_ids allowed to DM the bot (comma-separated). **Empty = only the owner may DM** |
 
 Credentials are read in this order: inline config → environment variables → the file written by the registration wizard.
+
+## Access control (security model)
+
+The bot's **security boundary is exactly "who may send it a message"**: every
+message becomes an agent turn with host-level permissions, so access is
+deny-by-default:
+
+- **The owner always passes.** The person who scanned the QR at registration
+  is the owner (open_id stored in `credentials.json`); older installs are
+  backfilled automatically at startup via the app-info API.
+- **Groups:** only chat ids listed in `DSH_LARK_ALLOWED_CHATS` may use the bot.
+- **DMs:** only open_ids listed in `DSH_LARK_ALLOWED_USERS` may use the bot
+  (owner always allowed).
+- **Fail-closed:** with an unknown owner and empty allowlists, *every* message
+  is denied — the denial reply includes the chat id so you can configure it.
+
+Example:
+
+```bash
+# Allow groups oc_xxx1, oc_xxx2 and let ou_friend DM the bot
+export DSH_LARK_ALLOWED_CHATS="oc_xxx1,oc_xxx2"
+export DSH_LARK_ALLOWED_USERS="ou_friend"
+```
+
+> Runtime owner resolution needs the `application-info` scope; the
+> registration wizard captures the open_id directly, so usually nothing extra
+> is needed. **Any deployment reachable by people outside your team should
+> configure the allowlists.**
 
 ---
 

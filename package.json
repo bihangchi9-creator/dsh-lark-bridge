@@ -26,6 +26,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "dev": "tsc -p tsconfig.json --watch",
     "register": "node lib/register-cli.js",
     "setup": "bash scripts/setup.sh",
@@ -64,6 +65,7 @@
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/qrcode-terminal": "^0.12.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.11"
   }
 }

@@ -22,6 +22,13 @@ export interface SavedCredentials {
   appId: string
   appSecret: string
   tenant: LarkTenant
+  /**
+   * open_id of the app owner, captured at registration (the person who
+   * scanned the QR). Used by the access gate to bootstrap trust without any
+   * pre-configuration. `undefined` for credentials written before this field
+   * existed — the plugin backfills it at runtime via the app-info API.
+   */
+  ownerId?: string
   /** App/bot display name, captured at registration for nicer logs. */
   botName?: string
   /** Unix ms when these credentials were saved. */
@@ -77,6 +84,7 @@ export function readCredentials(): SavedCredentials | undefined {
         appId: parsed.appId,
         appSecret: parsed.appSecret,
         tenant: parsed.tenant === 'lark' ? 'lark' : 'feishu',
+        ownerId: typeof parsed.ownerId === 'string' ? parsed.ownerId : undefined,
         botName: parsed.botName,
         savedAt: typeof parsed.savedAt === 'number' ? parsed.savedAt : 0,
       }
@@ -94,4 +102,16 @@ export function writeCredentials(creds: Omit<SavedCredentials, 'savedAt'>): stri
   const payload: SavedCredentials = { ...creds, savedAt: Date.now() }
   writeFileSync(path, `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 })
   return path
+}
+
+/**
+ * Backfill (or update) the owner open_id in the saved credentials without
+ * touching anything else. Used by the runtime owner resolver when the
+ * app-info API returns an owner that registration did not capture.
+ */
+export function saveOwnerId(ownerId: string): void {
+  const existing = readCredentials()
+  if (!existing) return
+  if (existing.ownerId === ownerId) return
+  writeCredentials({ ...existing, ownerId })
 }

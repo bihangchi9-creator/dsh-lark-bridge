@@ -73,10 +73,14 @@ export async function runRegister(hooks: RegisterHooks = {}): Promise<SavedCrede
   })
 
   const tenant: LarkTenant = result.user_info?.tenant_brand === 'lark' ? 'lark' : 'feishu'
+  // The person who scanned the QR is the app owner — their open_id is the
+  // bootstrap trust anchor for the access gate (see access.ts).
+  const ownerId = result.user_info?.open_id
   const path = writeCredentials({
     appId: result.client_id,
     appSecret: result.client_secret,
     tenant,
+    ...(ownerId ? { ownerId } : {}),
   })
   clearRegisterUrl()
 

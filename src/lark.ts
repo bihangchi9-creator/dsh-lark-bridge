@@ -12,13 +12,18 @@
 
 import type { LarkChannel, LarkChannelOptions, NormalizedMessage } from '@larksuite/channel'
 import { createLarkChannel } from '@larksuite/channel'
+import { decideAccess } from './access.js'
 import { parseCommand, HELP_TEXT } from './commands.js'
 import { domainFor, type ResolvedConfig } from './config.js'
+import { saveOwnerId } from './credentials.js'
 import { DshBinding, type BridgeEvent } from './dsh-binding.js'
 import { resolveWorkspace } from './workspace.js'
 
 /** Coalesce streamed deltas so we do not spam Feishu with one edit per token. */
 const STREAM_FLUSH_MS = 500
+
+/** How often the app owner is re-resolved from the app-info API. */
+const OWNER_REFRESH_MS = 30 * 60 * 1000
 
 /** Per-chat model override, chosen via `/model <name>`. */
 type ChatModels = Map<string, string>
@@ -32,6 +37,13 @@ export class LarkBridge {
   private readonly chatModels: ChatModels = new Map()
   /** Chats with a run currently in flight — a simple one-run-per-chat guard. */
   private readonly busy = new Set<string>()
+  /**
+   * open_id of the app owner. Seeded from the credentials captured at
+   * registration; when absent, resolved at runtime via the app-info API and
+   * persisted back (see {@link resolveOwner}).
+   */
+  private ownerId: string | undefined
+  private ownerRefreshTimer: ReturnType<typeof setInterval> | undefined
 
   constructor(
     private readonly config: ResolvedConfig,
@@ -51,6 +63,7 @@ export class LarkBridge {
       respectProxyEnv: true,
     }
     this.channel = createLarkChannel(opts)
+    this.ownerId = config.ownerId
   }
 
   /** Connect the WebSocket and start handling messages. */
@@ -65,20 +78,76 @@ export class LarkBridge {
     })
     await this.channel.connect()
     this.log('info', `dsh-lark-bridge connected (${this.config.tenant})`)
+
+    // Resolve the owner if registration did not capture it (pre-upgrade
+    // installs), then keep it fresh in case the app changes hands.
+    if (!this.ownerId) void this.resolveOwner()
+    this.ownerRefreshTimer = setInterval(() => {
+      void this.resolveOwner()
+    }, OWNER_REFRESH_MS)
+    this.ownerRefreshTimer.unref?.()
   }
 
   /** Disconnect and dispose every agent. */
   async disconnect(): Promise<void> {
+    if (this.ownerRefreshTimer) clearInterval(this.ownerRefreshTimer)
+    this.ownerRefreshTimer = undefined
     await this.binding.disposeAll()
     await this.channel.disconnect()
   }
 
-  /** Route one inbound message: command or agent prompt. */
+  /**
+   * Resolve the app owner's open_id via the app-info API and persist it, so
+   * the access gate works even for credentials written before the owner was
+   * captured. Best-effort: on failure the owner stays unknown and the gate
+   * stays fail-closed.
+   */
+  private async resolveOwner(): Promise<void> {
+    try {
+      const info = await this.channel.getAppInfo({ userIdType: 'open_id' })
+      if (!info.ownerId) return
+      this.ownerId = info.ownerId
+      try {
+        saveOwnerId(info.ownerId)
+      } catch {
+        // Persisting is a convenience; the in-memory value is what gates.
+      }
+      this.log('info', `app owner resolved (${info.ownerId})`)
+    } catch (err) {
+      this.log(
+        'warn',
+        'could not resolve app owner via app-info API (access stays fail-closed)',
+        err,
+      )
+    }
+  }
+
+  /** Route one inbound message: access gate, command, or agent prompt. */
   private async onMessage(msg: NormalizedMessage): Promise<void> {
     // Never react to our own or other bots' messages — avoids loops.
     if (msg.senderIsBot) return
     const text = msg.content?.trim() ?? ''
     if (text.length === 0) return
+
+    // Access gate: the security boundary is exactly "who may send the bot a
+    // message". Deny loudly and explain how to fix — never fall through.
+    const decision = decideAccess(
+      {
+        ownerId: this.ownerId,
+        allowedChats: this.config.allowedChats,
+        allowedUsers: this.config.allowedUsers,
+      },
+      { chatId: msg.chatId, chatType: msg.chatType, senderId: msg.senderId },
+    )
+    if (!decision.ok) {
+      this.log('warn', 'access denied', {
+        chatId: msg.chatId,
+        chatType: msg.chatType,
+        senderId: msg.senderId,
+      })
+      await this.reply(msg, deniedMessage(msg))
+      return
+    }
 
     // Commands are handled locally and never reach the agent.
     const command = parseCommand(text)
@@ -224,6 +293,25 @@ export class LarkBridge {
   private async reply(msg: NormalizedMessage, markdown: string): Promise<void> {
     await this.channel.send(msg.chatId, { markdown }, { replyTo: msg.messageId })
   }
+}
+
+/**
+ * The denial message for a blocked message. Includes the chat id on purpose:
+ * it is not a secret, and the owner needs it to configure the allowlist.
+ */
+function deniedMessage(msg: NormalizedMessage): string {
+  if (msg.chatType === 'p2p') {
+    return (
+      '🔒 你未授权使用该机器人。\n' +
+      '请机器人 owner 将你的 open_id 加入 `DSH_LARK_ALLOWED_USERS`，' +
+      '或由 owner 本人直接私聊（owner 始终可用）。'
+    )
+  }
+  return (
+    `🔒 此群未授权使用该机器人。\n` +
+    `chatId: \`${msg.chatId}\`\n` +
+    '请机器人 owner 将该 chatId 加入 `DSH_LARK_ALLOWED_CHATS` 白名单。'
+  )
 }
 
 /** Promise-based delay. */

@@ -165,8 +165,29 @@ export LARK_TENANT=feishu      # 国际版 larksuite.com 用 `lark`
 | `workspaceRoot` | `DSH_LARK_WORKSPACE_ROOT` | `~/dsh-lark-workspaces` | 按群文件夹的根目录 |
 | `allowDm` | `DSH_LARK_ALLOW_DM` | `true` | 是否响应私聊 |
 | `requireMention` | `DSH_LARK_REQUIRE_MENTION` | `true` | 群里是否必须 `@` 才触发 |
+| `allowedChats` | `DSH_LARK_ALLOWED_CHATS` | `[]` | 允许使用机器人的群 chatId（逗号分隔）。**空 = 任何群都不允许（fail-closed）** |
+| `allowedUsers` | `DSH_LARK_ALLOWED_USERS` | `[]` | 允许私聊使用机器人的用户 open_id（逗号分隔）。**空 = 私聊只允许 owner** |
 
 凭证读取顺序：内联 config → 环境变量 → 注册向导写的文件。
+
+## 访问控制（安全模型）
+
+机器人的**安全边界 = "谁能给机器人发消息"**：每条消息都会变成一次宿主机权限的智能体回合，所以默认严格拒绝：
+
+- **owner 永远放行**：注册时扫码的那个人就是 owner（open_id 存于 `credentials.json`）；老安装会在启动时通过应用信息 API 自动回填。
+- **群聊**：只有 chatId 在 `DSH_LARK_ALLOWED_CHATS` 里的群可以用。
+- **私聊**：只有 open_id 在 `DSH_LARK_ALLOWED_USERS` 里的用户可以用（owner 除外）。
+- **fail-closed**：owner 未知且白名单为空时，**所有消息都被拒绝**，拒绝回复里会带上 chatId 方便你配置。
+
+配置示例：
+
+```bash
+# 允许群 oc_xxx1、oc_xxx2，允许用户 ou_friend 私聊
+export DSH_LARK_ALLOWED_CHATS="oc_xxx1,oc_xxx2"
+export DSH_LARK_ALLOWED_USERS="ou_friend"
+```
+
+> 需要 `application-info` 权限才能运行时解析 owner；注册向导直接捕获 open_id，通常不需要额外配置。**强烈建议任何暴露给团队以外的人使用的部署都配置白名单。**
 
 ---
 

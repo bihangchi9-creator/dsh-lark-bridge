@@ -40,6 +40,18 @@ export interface LarkBridgeConfig {
   allowDm?: boolean
   /** In group chats, require an @-mention of the bot to trigger. Default true. */
   requireMention?: boolean
+  /**
+   * Group chat ids (`oc_...`) allowed to drive the bot. Empty = no group
+   * allowed (fail-closed). Falls back to `DSH_LARK_ALLOWED_CHATS`
+   * (comma-separated).
+   */
+  allowedChats?: string[]
+  /**
+   * User open_ids allowed to drive the bot in DMs. Empty = no DM user
+   * allowed (fail-closed). The app owner always passes regardless. Falls back
+   * to `DSH_LARK_ALLOWED_USERS` (comma-separated).
+   */
+  allowedUsers?: string[]
 }
 
 export const Config: Schema<LarkBridgeConfig> = Schema.object({
@@ -51,6 +63,8 @@ export const Config: Schema<LarkBridgeConfig> = Schema.object({
   workspaceRoot: Schema.string(),
   allowDm: Schema.boolean(),
   requireMention: Schema.boolean(),
+  allowedChats: Schema.array(Schema.string()),
+  allowedUsers: Schema.array(Schema.string()),
 })
 
 /** The fully-resolved config after environment fallback; secrets are guaranteed present. */
@@ -63,6 +77,10 @@ export interface ResolvedConfig {
   workspaceRoot: string
   allowDm: boolean
   requireMention: boolean
+  /** open_id of the app owner captured at registration, when known. */
+  ownerId?: string
+  allowedChats: string[]
+  allowedUsers: string[]
 }
 
 /** Read a boolean-ish env var (`1/true/yes/on` = true), returning `fallback` when unset. */
@@ -99,7 +117,19 @@ export function tryResolveConfig(config: LarkBridgeConfig): ResolvedConfig | und
       config.workspaceRoot ?? env.DSH_LARK_WORKSPACE_ROOT ?? `${home}/dsh-lark-workspaces`,
     allowDm: config.allowDm ?? envBool(env.DSH_LARK_ALLOW_DM, true),
     requireMention: config.requireMention ?? envBool(env.DSH_LARK_REQUIRE_MENTION, true),
+    ownerId: saved?.ownerId,
+    allowedChats: config.allowedChats ?? envList(env.DSH_LARK_ALLOWED_CHATS),
+    allowedUsers: config.allowedUsers ?? envList(env.DSH_LARK_ALLOWED_USERS),
   }
+}
+
+/** Parse a comma-separated env list into a trimmed string array (empty when unset). */
+function envList(value: string | undefined): string[] {
+  if (value === undefined || value.trim() === '') return []
+  return value
+    .split(',')
+    .map(item => item.trim())
+    .filter(item => item.length > 0)
 }
 
 /**
