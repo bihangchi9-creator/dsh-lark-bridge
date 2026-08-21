@@ -1,0 +1,63 @@
+# lark-workspace — the default access tier for Feishu-driven agents.
+#
+# Blast-radius reduction at the preset level: the host sandbox/approval stack
+# is host-plane and identical for every preset, so the enforceable difference
+# between tiers is WHICH TOOLS EXIST. This tier keeps file read/write/edit in
+# the agent's own workspace but deliberately removes the crown jewels of the
+# attack surface: shell execution, network egress, and delegation.
+#
+# Install by copying this directory into a preset root the deployment reads,
+# e.g. the harness-home user root: ~/.dsh/.agent-presets/lark-workspace/
+# (preset discovery is uncached — new presets are visible on the next mount).
+
+# ── identity ────────────────────────────────────────────────────────────────
+# `{{model}}` / `{{cwd}}` resolve from the agent's own route and workspace.
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are a coding agent running in a Feishu/Lark group chat. Your working
+      directory is {{cwd}}. You can read, search, write and edit files, but you
+      have NO shell, NO network access and NO subagents. Never try to execute
+      code or fetch URLs — tell the user the exact command to run instead.
+
+# ── filesystem (host-plane fs, keyed per agent by its own cwd) ─────────────
+- id: tool-fs
+  name: '@deepseek-ai/dsh-tool-fs'
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+- id: str-replace-editor
+  name: '@deepseek-ai/dsh-tool-str-replace-editor'
+  config:
+    maxOutputChars: 16000
+
+# ── small conveniences ──────────────────────────────────────────────────────
+- id: tool-todo
+  name: '@deepseek-ai/dsh-tool-todo'
+  config:
+    allowParallelInProgress: true
+
+# ── compaction (keeps long group sessions from blowing context) ─────────────
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024

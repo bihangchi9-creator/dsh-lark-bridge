@@ -19,6 +19,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { Config, resolveConfig, tryResolveConfig, type LarkBridgeConfig } from './config.js'
+import { PRESET_BY_ACCESS_MODE } from './access-mode.js'
 import { registerUrlPath, writeRegisterUrl } from './credentials.js'
 import { DshBinding } from './dsh-binding.js'
 import { LarkBridge } from './lark.js'
@@ -58,7 +59,17 @@ export function apply(ctx: Context, config: LarkBridgeConfig = {}): void {
     // path and the post-registration path.
     const connect = (resolved: ReturnType<typeof resolveConfig>): void => {
       if (cancelled) return
-      const binding = new DshBinding(ctx, { provider: resolved.provider, model: resolved.model })
+      // P0-2 blast radius: the accessMode tier picks the agent preset (which
+      // tools exist), not just the model route.
+      const binding = new DshBinding(
+        ctx,
+        {
+          provider: resolved.provider,
+          model: resolved.model,
+          preset: PRESET_BY_ACCESS_MODE[resolved.accessMode],
+        },
+        log,
+      )
       bridge = new LarkBridge(resolved, binding, log)
       void bridge.connect().catch(err => log('error', 'failed to connect', err))
     }

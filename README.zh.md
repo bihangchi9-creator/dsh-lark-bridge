@@ -189,6 +189,28 @@ export DSH_LARK_ALLOWED_USERS="ou_friend"
 
 > 需要 `application-info` 权限才能运行时解析 owner；注册向导直接捕获 open_id，通常不需要额外配置。**强烈建议任何暴露给团队以外的人使用的部署都配置白名单。**
 
+## 权限档位（爆炸半径）
+
+即使消息通过了授权门，agent 能碰到什么仍然按档位收敛（`DSH_LARK_ACCESS_MODE`，默认 `workspace`）：
+
+| 档位 | preset | agent 能做什么 |
+|---|---|---|
+| `read-only` | `lark-readonly` | 只能搜索/读取文件——不能写、不能执行、不能联网 |
+| `workspace`（默认） | `lark-workspace` | 读写/编辑文件；**没有 shell、没有网络、没有子代理**（不可执行任意代码） |
+| `full` | 部署默认 | 宿主提供的全部能力（含 bash、网络、子代理） |
+
+preset 是 dsh 的"工具集组合"概念：宿主沙箱对所有 preset 一致，档位的可执行差异 = **哪些工具存在**。工作区档把攻击面的皇冠（任意代码执行 + 网络出口 + 委托）整个拿掉。
+
+安装 preset（复制到 dsh 的 harness-home 用户根目录即可，发现无缓存）：
+
+```bash
+# 把项目里的 presets/ 装进 dsh 的 preset 根
+mkdir -p ~/.dsh/.agent-presets
+cp -r presets/lark-workspace presets/lark-readonly ~/.dsh/.agent-presets/
+```
+
+> 进一步的收敛（宿主级）：dsh 的权限预设 `workspace-write`（沙箱=工作区内写 + 越界需审批）可以让 fs 写入硬性限制在工作区内——但该模式对远程用户是"越界即拒绝"（审批弹窗无人点），且会改变 bash 行为，启用前需在目标部署验证。当前插件层档位已经移除 bash/web/子代理，是收益/风险比最高的部分。
+
 ---
 
 ## 与 lark-cli 搭配使用

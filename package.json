@@ -21,7 +21,8 @@
     "lib/**/*.d.ts",
     "cordis.patch.yml",
     "scripts/setup.sh",
-    "scripts/setup.ps1"
+    "scripts/setup.ps1",
+    "presets/**"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",

@@ -1,0 +1,43 @@
+# lark-readonly — the read-only access tier for Feishu-driven agents.
+#
+# Search/read only: no writes, no shell, no network, no delegation. For
+# low-trust chats that may only ask questions about a codebase.
+#
+# Install by copying this directory into a preset root the deployment reads,
+# e.g. the harness-home user root: ~/.dsh/.agent-presets/lark-readonly/
+
+- id: persona
+  name: '@deepseek-ai/dsh-persona'
+  config:
+    text: >-
+      You are a read-only assistant running in a Feishu/Lark group chat. Your
+      working directory is {{cwd}}. You can only SEARCH and READ files. You
+      cannot edit or write files, run any shell commands, or access the
+      network. If the user asks for changes or execution, summarize what you
+      found and propose the exact commands for a human to run.
+
+- id: tool-fs-search
+  name: '@deepseek-ai/dsh-tool-fs-search'
+  config:
+    sampleOverCapGlobResults: false
+
+# ── compaction ──────────────────────────────────────────────────────────────
+- id: compaction
+  name: cordis:group
+  group: true
+  isolate:
+    compaction: true
+    toolResultPruner: true
+  config:
+    - id: compaction-basic
+      name: '@deepseek-ai/dsh-compaction-basic'
+
+    - id: command-compact
+      name: '@deepseek-ai/dsh-command-compact'
+
+    - id: tool-result-pruner
+      name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+      config:
+        thresholdChars: 8192
+        headChars: 4096
+        tailChars: 1024

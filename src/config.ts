@@ -14,6 +14,7 @@
  */
 
 import Schema from '@deepseek-ai/schemastery'
+import { parseAccessMode, type AccessMode } from './access-mode.js'
 import { readCredentials } from './credentials.js'
 
 /** Tenant selects the Feishu (feishu.cn) vs Lark (larksuite.com) open domain. */
@@ -52,6 +53,13 @@ export interface LarkBridgeConfig {
    * to `DSH_LARK_ALLOWED_USERS` (comma-separated).
    */
   allowedUsers?: string[]
+  /**
+   * How much of the host an agent may touch. `workspace` (default) mounts a
+   * restricted preset (file editing, no shell/network/subagents);
+   * `read-only` mounts a read/search-only preset; `full` mounts the
+   * deployment default. Falls back to `DSH_LARK_ACCESS_MODE`.
+   */
+  accessMode?: AccessMode
 }
 
 export const Config: Schema<LarkBridgeConfig> = Schema.object({
@@ -65,6 +73,7 @@ export const Config: Schema<LarkBridgeConfig> = Schema.object({
   requireMention: Schema.boolean(),
   allowedChats: Schema.array(Schema.string()),
   allowedUsers: Schema.array(Schema.string()),
+  accessMode: Schema.union(['read-only', 'workspace', 'full'] as const),
 })
 
 /** The fully-resolved config after environment fallback; secrets are guaranteed present. */
@@ -81,6 +90,7 @@ export interface ResolvedConfig {
   ownerId?: string
   allowedChats: string[]
   allowedUsers: string[]
+  accessMode: AccessMode
 }
 
 /** Read a boolean-ish env var (`1/true/yes/on` = true), returning `fallback` when unset. */
@@ -120,6 +130,7 @@ export function tryResolveConfig(config: LarkBridgeConfig): ResolvedConfig | und
     ownerId: saved?.ownerId,
     allowedChats: config.allowedChats ?? envList(env.DSH_LARK_ALLOWED_CHATS),
     allowedUsers: config.allowedUsers ?? envList(env.DSH_LARK_ALLOWED_USERS),
+    accessMode: parseAccessMode(config.accessMode ?? env.DSH_LARK_ACCESS_MODE, 'workspace'),
   }
 }
 

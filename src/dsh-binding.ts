@@ -140,6 +140,7 @@ export class DshBinding {
   constructor(
     private readonly ctx: Context,
     private readonly route: AgentRoute,
+    private readonly log?: (level: 'info' | 'warn' | 'error', msg: string, extra?: unknown) => void,
   ) {
     // One global subscription; routed to the right chat by the session id we
     // minted for it. dsh emits (session, event) for every live agent.
@@ -240,7 +241,24 @@ export class DshBinding {
       : routeOnly
     const setup = async (agentCtx: unknown): Promise<void> => {
       if (selection) installModelSelection(agentCtx as Context, selection)
-      if (presets) await presets.mount(agentCtx, preset)
+      if (presets) {
+        try {
+          await presets.mount(agentCtx, preset)
+        } catch (err) {
+          if (preset === undefined) throw err
+          // The named tier preset (lark-workspace / lark-readonly) is not
+          // installed in this deployment. Rather than fail every turn, fall
+          // back to the deployment default and say so loudly — otherwise a
+          // deployment without the presets silently loses its blast-radius
+          // reduction.
+          this.log?.(
+            'warn',
+            `preset ${JSON.stringify(preset)} unavailable — falling back to the deployment default`,
+            err,
+          )
+          await presets.mount(agentCtx, undefined)
+        }
+      }
     }
 
     // Resume-or-create: a fixed per-chat session id collides with `create` once

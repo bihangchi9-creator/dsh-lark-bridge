@@ -1,0 +1,3 @@
+name: Lark read-only
+description: Feishu bridge read-only tier — search/read only, no writes, no shell, no network.
+order: 21

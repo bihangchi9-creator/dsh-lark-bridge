@@ -199,6 +199,36 @@ export DSH_LARK_ALLOWED_USERS="ou_friend"
 > is needed. **Any deployment reachable by people outside your team should
 > configure the allowlists.**
 
+## Access tiers (blast radius)
+
+Even after the access gate passes, what an agent may touch is tiered
+(`DSH_LARK_ACCESS_MODE`, default `workspace`):
+
+| Tier | Preset | What the agent can do |
+|---|---|---|
+| `read-only` | `lark-readonly` | search/read files only — no writes, no shell, no network |
+| `workspace` (default) | `lark-workspace` | read/write/edit files; **no shell, no network, no subagents** (no arbitrary code execution) |
+| `full` | deployment default | everything the host offers (shell, network, subagents) |
+
+Presets are dsh's *toolset compositions*: the host sandbox is identical for
+every preset, so the enforceable difference between tiers is **which tools
+exist**. The workspace tier removes the crown jewels of the attack surface —
+arbitrary code execution, network egress, and delegation.
+
+Install the presets into the harness-home user root (discovery is uncached):
+
+```bash
+mkdir -p ~/.dsh/.agent-presets
+cp -r presets/lark-workspace presets/lark-readonly ~/.dsh/.agent-presets/
+```
+
+> Further host-level hardening: dsh's `workspace-write` permission preset
+> (sandbox = writes inside the workspace, wider operations require approval)
+> hard-bounds fs writes — but for remote users "wider" means "denied" (nobody
+> can click the approval prompt), and it changes shell behavior, so verify it
+> in your target deployment before enabling. The plugin-level tiers already
+> remove shell/web/subagents, which is the highest value-per-risk change.
+
 ---
 
 ## Pairs well with lark-cli
