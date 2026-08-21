@@ -22,7 +22,16 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { join } from 'node:path'
+import { bridgeHome } from './credentials.js'
 import { BRIDGE_SYSTEM_PROMPT } from './bridge-prompt.js'
+import {
+  nextGen,
+  policyFingerprint,
+  resetEntry,
+  SessionCatalog,
+  sessionIdFor,
+} from './session-catalog.js'
 
 /**
  * A resolved model route: which provider + model (and optional reasoning
@@ -137,12 +146,15 @@ interface AgentDefaultModelLike {
 export class DshBinding {
   private readonly sessions = new Map<string, BridgeSession>()
   private readonly handlers = new Map<string, (event: BridgeEvent) => void>()
+  /** Durable per-chat generation/fingerprint store (P3). */
+  private readonly catalog: SessionCatalog
 
   constructor(
     private readonly ctx: Context,
     private readonly route: AgentRoute,
     private readonly log?: (level: 'info' | 'warn' | 'error', msg: string, extra?: unknown) => void,
   ) {
+    this.catalog = new SessionCatalog(join(bridgeHome(), 'session-catalog.json'))
     // One global subscription; routed to the right chat by the session id we
     // minted for it. dsh emits (session, event) for every live agent.
     ctx.on('session/event', (session: { id: unknown }, event: unknown) => {
@@ -211,12 +223,22 @@ export class DshBinding {
 
     const agents = this.agents
     const presets = this.agentPresets
+    // P3: the session id carries the generation for this chat's policy
+    // fingerprint; resume only happens when the policy still matches.
+    const { preset, ...routeOnly } = { ...this.route, ...routeOverride }
+    const fingerprint = policyFingerprint({
+      cwd,
+      preset,
+      provider: routeOnly.provider,
+      model: routeOnly.model,
+    })
+    const entry = this.catalog.entryFor(chatId)
+    const gen = nextGen(entry, fingerprint)
     // A stable, readable id per chat keeps sessions greppable in dsh logs.
-    const sessionId = SessionId(`lark-${chatId}`)
+    const sessionId = SessionId(sessionIdFor(chatId, gen))
     // `preset` selects the agent's composed world (tools + prompt); the model
     // route (`provider`/`model`) is separate and must be bound explicitly —
     // mounting a preset does NOT give the agent a model.
-    const { preset, ...routeOnly } = { ...this.route, ...routeOverride }
 
     // Resolve the model selection. A preset alone leaves the agent with no
     // model, so every turn would end immediately with no output. We seed the
@@ -329,6 +351,9 @@ export class DshBinding {
     this.handlers.set(key, onEvent)
     if (sessionKey !== key) this.handlers.set(sessionKey, onEvent)
 
+    // P3: record which generation this chat is now on and under which policy.
+    this.catalog.set(chatId, { gen, fingerprint, updatedAt: Date.now() })
+
     const session: BridgeSession = {
       sessionId: key,
       send: (text: string) => {
@@ -352,6 +377,17 @@ export class DshBinding {
   async dispose(chatId: string): Promise<void> {
     const session = this.sessions.get(chatId)
     if (session) await session.dispose()
+  }
+
+  /**
+   * Reset a chat's conversation for real (`/new`): dispose the live session
+   * AND write a sentinel catalog entry so the next `ensureSession` rotates to
+   * a fresh generation instead of resuming the persisted log.
+   */
+  reset(chatId: string): void {
+    const entry = this.catalog.entryFor(chatId)
+    this.catalog.set(chatId, resetEntry(entry))
+    void this.dispose(chatId)
   }
 
   /** Dispose every live session (plugin teardown). */

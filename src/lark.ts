@@ -187,7 +187,10 @@ export class LarkBridge {
         await this.reply(msg, HELP_TEXT)
         return
       case 'new': {
-        await this.binding.dispose(msg.chatId)
+        // P3: reset must defeat persistence — a sentinel fingerprint makes
+        // the next session rotate to a fresh generation, so the old context
+        // cannot come back after a restart.
+        this.binding.reset(msg.chatId)
         await this.reply(msg, '🧹 Started a fresh session for this chat.')
         return
       }
