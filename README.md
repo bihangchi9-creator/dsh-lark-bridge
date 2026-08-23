@@ -150,6 +150,9 @@ export LARK_TENANT=feishu      # or `lark` for larksuite.com
 | `/new` | Start a fresh session (clears this chat's context) |
 | `/where` | Show this chat's project directory |
 | `/model [name]` | Show or switch the model for this chat |
+| `/whoami` | Show your identity and this chat's authorization state |
+| `/allow` | (owner only, group chats) Authorize this chat to use the bot |
+| `/disallow` | (owner only, group chats) Revoke this chat's authorization |
 
 In a **group** chat, `@`-mention the bot to trigger it (unless mention is disabled). In a **DM**, just send a message.
 
