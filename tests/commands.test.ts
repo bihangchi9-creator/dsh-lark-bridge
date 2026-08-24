@@ -43,6 +43,10 @@ describe('parseCommand', () => {
     expect(parseCommand('/whoami')).toEqual({ kind: 'whoami' })
   })
 
+  it('parses /models', () => {
+    expect(parseCommand('/models')).toEqual({ kind: 'models' })
+  })
+
   it('parses /preset with and without a value', () => {
     expect(parseCommand('/preset')).toEqual({ kind: 'preset', value: undefined })
     expect(parseCommand('/preset internal')).toEqual({ kind: 'preset', value: 'internal' })

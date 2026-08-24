@@ -138,6 +138,12 @@ interface AgentDefaultModelLike {
   currentSelection(): ModelSelection
 }
 
+/** The llm service surface the model-catalog query needs (structural, optional). */
+interface LlmLike {
+  listProviders(): Array<{ id: string; name: string }>
+  listModels(provider: string): Promise<Array<{ id: string; name?: string }>>
+}
+
 /**
  * Wraps `ctx.agents` for one plugin instance. Owns a `chatId -> BridgeSession`
  * map so each Feishu chat gets exactly one long-lived agent, and fans the
@@ -179,6 +185,40 @@ export class DshBinding {
   /** The injected default-model service, if the deployment composed one. */
   private get agentDefaultModel(): AgentDefaultModelLike | undefined {
     return (this.ctx as unknown as { agentDefaultModel?: AgentDefaultModelLike }).agentDefaultModel
+  }
+
+  /** The injected llm service (provider/model catalog), when composed. */
+  private get llm(): LlmLike | undefined {
+    return (this.ctx as unknown as { llm?: LlmLike }).llm
+  }
+
+  /**
+   * List the deployment's model catalog: every provider, and each provider's
+   * advertised models. Empty on failure — the caller decides how to render.
+   */
+  async listModels(): Promise<Array<{ provider: string; providerName?: string; models: Array<{ id: string; name?: string }> }>> {
+    const llm = this.llm
+    if (!llm) return []
+    try {
+      const providers = llm.listProviders()
+      const out = []
+      for (const p of providers) {
+        try {
+          const models = await llm.listModels(p.id)
+          out.push({
+            provider: p.id,
+            providerName: p.name,
+            models: models.map(m => ({ id: m.id, name: m.name })),
+          })
+        } catch {
+          // A provider whose catalog is unavailable is listed with no models.
+          out.push({ provider: p.id, providerName: p.name, models: [] })
+        }
+      }
+      return out
+    } catch {
+      return []
+    }
   }
 
   /**

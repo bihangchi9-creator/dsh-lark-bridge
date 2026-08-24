@@ -330,13 +330,40 @@ export class LarkBridge {
       case 'model': {
         if (!command.value) {
           const current = this.chatModels.get(msg.chatId) ?? this.config.model ?? '(default)'
-          await this.reply(msg, `🤖 Current model: \`${current}\`\nUse \`/model <name>\` to switch.`)
+          await this.reply(msg, `🤖 Current model: \`${current}\`\nUse \`/model <name>\` to switch, \`/models\` to list.`)
           return
         }
         this.chatModels.set(msg.chatId, command.value)
         // A model change only takes effect on a fresh session.
         await this.binding.dispose(msg.chatId)
         await this.reply(msg, `🤖 Model set to \`${command.value}\` and session reset.`)
+        return
+      }
+      case 'models': {
+        // List the deployment's model catalog from the llm service.
+        const catalog = await this.binding.listModels()
+        if (catalog.length === 0) {
+          await this.reply(msg, '🤖 模型目录不可用（llm 服务未提供）。')
+          return
+        }
+        const lines: string[] = ['🤖 **可用模型**（`/model <id>` 切换）:']
+        for (const p of catalog) {
+          const head = p.providerName ?? p.provider
+          if (p.models.length === 0) {
+            lines.push(`- **${head}**: (无目录)`)
+            continue
+          }
+          lines.push(
+            `- **${head}**:\n` +
+              p.models
+                .map(m => (m.name && m.name !== m.id ? `  - \`${m.id}\` (${m.name})` : `  - \`${m.id}\``))
+                .join('\n'),
+          )
+        }
+        const text = lines.join('\n')
+        // Feishu replies are chunked at 8000 chars; a huge catalog would
+        // arrive as multiple messages — fine.
+        await this.reply(msg, text)
         return
       }
       case 'preset': {

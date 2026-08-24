@@ -14,6 +14,7 @@ export type Command =
   | { kind: 'new' }
   | { kind: 'where' }
   | { kind: 'model'; value?: string }
+  | { kind: 'models' }
   | { kind: 'preset'; value?: string }
   | { kind: 'allow' }
   | { kind: 'disallow' }
@@ -41,6 +42,8 @@ export function parseCommand(text: string): Command | undefined {
       return { kind: 'where' }
     case 'model':
       return { kind: 'model', value: arg.length > 0 ? arg : undefined }
+    case 'models':
+      return { kind: 'models' }
     case 'preset':
       return { kind: 'preset', value: arg.length > 0 ? arg : undefined }
     case 'allow':
@@ -65,6 +68,7 @@ export const HELP_TEXT = [
   '- `/new` — start a fresh session (clears this chat\'s context)',
   '- `/where` — show this chat\'s project directory',
   '- `/model [name]` — show or switch the model for this chat',
+  '- `/models` — list the available model catalog',
   '- `/whoami` — show this chat\'s id and authorization state',
   '',
   '**Owner-only**',
