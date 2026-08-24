@@ -445,8 +445,18 @@ export class LarkBridge {
     // the accessMode-derived preset from the plugin route. `full` maps to the
     // deployment default.
     const presetId = this.chatPresets.get(chatId)
-    const route: { model?: string; preset?: string } = {}
-    if (modelOverride !== undefined) route.model = modelOverride
+    const route: { model?: string; provider?: string; preset?: string } = {}
+    // Precedence: per-chat `/model` override > per-tier model route
+    // (DSH_LARK_PRESET_MODELS, e.g. bytedance -> trae-official) > global default.
+    if (modelOverride !== undefined) {
+      route.model = modelOverride
+    } else {
+      const tierModel = presetId !== undefined ? this.config.presetModels[presetId] : undefined
+      if (tierModel !== undefined) {
+        route.provider = tierModel.provider
+        route.model = tierModel.model
+      }
+    }
     if (presetId !== undefined) route.preset = presetNameFor(presetId, this.config.extraPresets)
 
     // Attachments: download images/files into the chat's workspace and hand

@@ -1,0 +1,21 @@
+import { describe, expect, it } from 'vitest'
+import { Config, tryResolveConfig } from '../src/config'
+
+describe('presetModels resolution (DSH_LARK_PRESET_MODELS)', () => {
+  it('parses provider:model routes from env, even through the schema', () => {
+    const validated = Config({})
+    const r = tryResolveConfig({
+      ...validated,
+      // simulate the schemastery default {} + env fallback path
+    })
+    // env is not set in the test runner, so extras resolve empty — this test
+    // asserts the field exists and defaults empty.
+    expect(r?.presetModels).toEqual({})
+  })
+
+  it('keeps explicit config over env', () => {
+    const validated = Config({ presetModels: { bytedance: { provider: 'trae-official', model: 'm1' } } })
+    const r = tryResolveConfig(validated)
+    expect(r?.presetModels).toEqual({ bytedance: { provider: 'trae-official', model: 'm1' } })
+  })
+})

@@ -82,6 +82,14 @@ export interface LarkBridgeConfig {
    * Falls back to `DSH_LARK_SSO_OK_MARKER`, default `Authenticated`.
    */
   ssoOkMarker?: string
+  /**
+   * Per-tier model routes: `presetId:provider:model` pairs (e.g.
+   * `bytedance:trae-official:Doubao-Seed-2.1-Pro`). Chats pinned to that
+   * preset route their agents through that provider/model, overriding the
+   * global default but not a per-chat `/model`. The tier itself carries the
+   * SSO gate. Falls back to `DSH_LARK_PRESET_MODELS`.
+   */
+  presetModels?: Record<string, { provider: string; model: string }>
 }
 
 export const Config: Schema<LarkBridgeConfig> = Schema.object({
@@ -100,6 +108,7 @@ export const Config: Schema<LarkBridgeConfig> = Schema.object({
   ssoGatedPresets: Schema.array(Schema.string()),
   ssoCheckCmd: Schema.string(),
   ssoOkMarker: Schema.string(),
+  presetModels: Schema.dict(Schema.object({ provider: Schema.string(), model: Schema.string() })),
 })
 
 /** The fully-resolved config after environment fallback; secrets are guaranteed present. */
@@ -121,6 +130,7 @@ export interface ResolvedConfig {
   ssoGatedPresets: string[]
   ssoCheckCmd?: string
   ssoOkMarker: string
+  presetModels: Record<string, { provider: string; model: string }>
 }
 
 /** Read a boolean-ish env var (`1/true/yes/on` = true), returning `fallback` when unset. */
@@ -177,7 +187,28 @@ export function tryResolveConfig(config: LarkBridgeConfig): ResolvedConfig | und
       : envList(env.DSH_LARK_SSO_GATED_PRESETS),
     ssoCheckCmd: config.ssoCheckCmd ?? env.DSH_LARK_SSO_CHECK_CMD,
     ssoOkMarker: config.ssoOkMarker ?? env.DSH_LARK_SSO_OK_MARKER ?? 'Authenticated',
+    presetModels: hasKeys2(config.presetModels)
+      ? config.presetModels
+      : parsePresetModels(env.DSH_LARK_PRESET_MODELS),
   }
+}
+
+/** True only for a record with at least one key (typed for the preset-model map). */
+function hasKeys2(
+  record: Record<string, { provider: string; model: string }> | undefined,
+): record is Record<string, { provider: string; model: string }> {
+  return record !== undefined && Object.keys(record).length > 0
+}
+
+/** Parse `"presetId:provider:model,id2:provider2:model2"` into a record. */
+function parsePresetModels(value: string | undefined): Record<string, { provider: string; model: string }> {
+  const out: Record<string, { provider: string; model: string }> = {}
+  if (value === undefined || value.trim() === '') return out
+  for (const entry of value.split(',')) {
+    const [presetId, provider, model] = entry.split(':').map(part => part.trim())
+    if (presetId && provider && model) out[presetId] = { provider, model }
+  }
+  return out
 }
 
 /** True only for a list with at least one item. */
