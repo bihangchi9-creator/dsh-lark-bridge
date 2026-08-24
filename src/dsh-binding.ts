@@ -189,7 +189,12 @@ export class DshBinding {
 
   /** The injected llm service (provider/model catalog), when composed. */
   private get llm(): LlmLike | undefined {
-    return (this.ctx as unknown as { llm?: LlmLike }).llm
+    // Accessed via `ctx.get` rather than a direct property: `llm` is NOT in
+    // the plugin's inject list (it is optional), and cordis THROWS on direct
+    // property access to an undeclared service.
+    const get = (this.ctx as unknown as { get(name: string): unknown }).get
+    if (typeof get !== 'function') return undefined
+    return get.call(this.ctx, 'llm') as LlmLike | undefined
   }
 
   /**
