@@ -20,8 +20,8 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import * as dshLlm from '@deepseek-ai/dsh-llm'
+import * as dshSession from '@deepseek-ai/dsh-session'
 import { join } from 'node:path'
 import { bridgeHome } from './credentials.js'
 import { BRIDGE_SYSTEM_PROMPT } from './bridge-prompt.js'
@@ -32,6 +32,16 @@ import {
   SessionCatalog,
   sessionIdFor,
 } from './session-catalog.js'
+
+/**
+ * Peer-package values are read through the namespace rather than named
+ * imports so that a renamed/removed export in a future dsh release degrades
+ * to a runtime error this plugin catches — NOT an ESM link-time crash that
+ * would take the whole host down at load. See the install-robustness notes.
+ */
+const createUserMessage = (dshLlm as { createUserMessage?: (input: unknown) => unknown })
+  .createUserMessage
+const SessionId = (dshSession as { SessionId?: (id: string) => unknown }).SessionId
 
 /**
  * A resolved model route: which provider + model (and optional reasoning
@@ -177,14 +187,21 @@ export class DshBinding {
     return (this.ctx as unknown as { agents: AgentsServiceLike }).agents
   }
 
-  /** The injected preset registry, if the deployment composed one. */
+  /** The injected preset registry, if the deployment composed one. Accessed
+   * via `ctx.get` because `agentPresets` is NOT in the plugin's inject list
+   * (optional); cordis throws on direct property access to undeclared services. */
   private get agentPresets(): AgentPresetsLike | undefined {
-    return (this.ctx as unknown as { agentPresets?: AgentPresetsLike }).agentPresets
+    const get = (this.ctx as unknown as { get(name: string): unknown }).get
+    if (typeof get !== 'function') return undefined
+    return get.call(this.ctx, 'agentPresets') as AgentPresetsLike | undefined
   }
 
-  /** The injected default-model service, if the deployment composed one. */
+  /** The injected default-model service, if the deployment composed one.
+   * Accessed via `ctx.get` for the same reason as {@link agentPresets}. */
   private get agentDefaultModel(): AgentDefaultModelLike | undefined {
-    return (this.ctx as unknown as { agentDefaultModel?: AgentDefaultModelLike }).agentDefaultModel
+    const get = (this.ctx as unknown as { get(name: string): unknown }).get
+    if (typeof get !== 'function') return undefined
+    return get.call(this.ctx, 'agentDefaultModel') as AgentDefaultModelLike | undefined
   }
 
   /** The injected llm service (provider/model catalog), when composed. */
@@ -280,6 +297,9 @@ export class DshBinding {
     const entry = this.catalog.entryFor(chatId)
     const gen = nextGen(entry, fingerprint)
     // A stable, readable id per chat keeps sessions greppable in dsh logs.
+    if (typeof SessionId !== 'function') {
+      throw new Error('dsh-lark-bridge: @deepseek-ai/dsh-session does not export SessionId (incompatible dsh version)')
+    }
     const sessionId = SessionId(sessionIdFor(chatId, gen))
     // `preset` selects the agent's composed world (tools + prompt); the model
     // route (`provider`/`model`) is separate and must be bound explicitly —
@@ -402,6 +422,9 @@ export class DshBinding {
     const session: BridgeSession = {
       sessionId: key,
       send: (text: string) => {
+        if (typeof createUserMessage !== 'function') {
+          throw new Error('dsh-lark-bridge: @deepseek-ai/dsh-llm does not export createUserMessage (incompatible dsh version)')
+        }
         // Prefer the live registry lookup so a hot-reloaded agent still works.
         const live = agents.get(handle.agent.id) ?? handle.agent
         live.followup(

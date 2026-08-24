@@ -63,6 +63,15 @@ else {
     Write-Host '    build  : lib/ present, skipping build'
 }
 
+# 2b. Hard gate: the plugin entry MUST exist before we register it, or dsh
+#     loads an empty package and the host fails to boot.
+if (-not (Test-Path (Join-Path $ProjectDir 'lib\index.js'))) {
+    Write-Error "$ProjectDir\lib\index.js is missing after build. Not registering. Run 'pnpm install; pnpm build' and check for errors."
+    exit 1
+}
+Write-Host '    entry  : lib/index.js present (ok)'
+
+
 # 3. Install the access-tier presets into the harness-home preset root
 #    ($DSH_HOME\.agent-presets). dsh discovers presets there (uncached); without
 #    them the workspace/read-only tiers fall back to the deployment default.

@@ -42,25 +42,18 @@
 
 ## 安装
 
-### 方式一：dsh 官方命令（已装好 dsh 时推荐）
+> **先构建。** 本仓库只提供 TypeScript 源码，编译产物 `lib/` 被 git 忽略——**全新 clone 没有构建产物**。插件入口是 `lib/index.js`，不构建就安装会让 dsh 拿到一个空包、**宿主加载失败**。`pnpm setup` 会替你构建；手动安装则必须先 `pnpm install && pnpm build`。
 
-```bash
-# 从你的 dsh 代码库目录执行；`link:` 指向本项目目录
-dsh plugin --profile web add link:/path/to/dsh-lark-bridge
-```
-
-`dsh plugin` 会在 profile 目录里执行 `pnpm add`，并**自动把声明了 `dsh.bundle` 的包加进 `dsh.profile.bundles`**——装完即注册，重启后自动加载，无需 `--patch`、无需手动改配置。卸载/升级同样是官方命令：`dsh plugin --profile web remove dsh-lark-bridge` / `dsh plugin --profile web update dsh-lark-bridge`。
-
-### 方式二：一键脚本（推荐）
+### 方式一：一键脚本（推荐）
 
 ```bash
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
 cd dsh-lark-bridge
-pnpm setup            # macOS / Linux（脚本: scripts/setup.sh）
-pnpm setup:win        # Windows（脚本: scripts/setup.ps1）
+pnpm setup            # macOS / Linux（scripts/setup.sh）——构建 + 链接 + 注册
+pnpm setup:win        # Windows（scripts/setup.ps1）
 ```
 
-脚本会：预检 Node 版本 → 构建插件 → 把插件链接进 dsh profile → **注册为 bundle**（`dsh` 可用时内部直接走方式一的官方命令）。
+脚本会：预检 Node 版本 → **构建插件（构建失败会明确报错并中止）** → 把插件链接进 dsh profile → **注册为 bundle**（`dsh` 可用时内部直接走官方 `dsh plugin` 命令）。
 之后直接启动即可，**不需要 `--patch` 参数**：
 
 ```bash
@@ -73,6 +66,20 @@ $env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 
 > 换 profile：`DSH_PROFILE=headless pnpm setup`；自定义 dsh 目录：`DSH_HOME=/path/.dsh pnpm setup`（Windows 同样支持这两个环境变量）。
 
+### 方式二：dsh 官方命令（务必先构建！）
+
+```bash
+git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
+cd dsh-lark-bridge
+pnpm install && pnpm build          # 必需——link 安装会从本目录拉取 lib/
+# 然后从你的 dsh 代码库目录执行：
+dsh plugin --profile web add link:/path/to/dsh-lark-bridge
+```
+
+`dsh plugin` 会在 profile 目录里执行 `pnpm add`，并**自动把声明了 `dsh.bundle` 的包加进 `dsh.profile.bundles`**。卸载/升级同样是官方命令：`dsh plugin --profile web remove dsh-lark-bridge` / `dsh plugin --profile web update dsh-lark-bridge`。
+
+> ⚠️ `link:` 安装会把 profile 依赖指向**本目录**。之后若移动或删除本目录，下次 `dsh web` 无法解析 bundle 而**启动失败**。请保持 clone 位置不变，或改用方式一。
+
 ### 方式三：手动安装（源码模式）
 
 由于 dsh 的公开 npm 依赖图还不完整，建议以「源码模式」和你的 dsh 代码库放在一起安装。
@@ -82,7 +89,7 @@ $env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
 cd dsh-lark-bridge
 pnpm install
-pnpm build            # 把 src/ 编译到 lib/
+pnpm build            # 把 src/ 编译到 lib/（插件加载前必需）
 ```
 
 然后把它注册成 dsh 的一个 **bundle**（装进 profile 即自动加载，无需 `--patch`）：

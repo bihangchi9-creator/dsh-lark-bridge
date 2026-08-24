@@ -474,7 +474,7 @@ export class LarkBridge {
     const presetId = this.chatPresets.get(chatId)
     const route: { model?: string; provider?: string; preset?: string } = {}
     // Precedence: per-chat `/model` override > per-tier model route
-    // (DSH_LARK_PRESET_MODELS, e.g. bytedance -> trae-official) > global default.
+    // (DSH_LARK_PRESET_MODELS, an extra tier -> its provider) > global default.
     if (modelOverride !== undefined) {
       route.model = modelOverride
     } else {

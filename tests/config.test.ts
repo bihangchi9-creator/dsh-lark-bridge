@@ -14,8 +14,8 @@ describe('presetModels resolution (DSH_LARK_PRESET_MODELS)', () => {
   })
 
   it('keeps explicit config over env', () => {
-    const validated = Config({ presetModels: { bytedance: { provider: 'trae-official', model: 'm1' } } })
+    const validated = Config({ presetModels: { internal: { provider: 'acme-provider', model: 'm1' } } })
     const r = tryResolveConfig(validated)
-    expect(r?.presetModels).toEqual({ bytedance: { provider: 'trae-official', model: 'm1' } })
+    expect(r?.presetModels).toEqual({ internal: { provider: 'acme-provider', model: 'm1' } })
   })
 })

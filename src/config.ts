@@ -84,10 +84,10 @@ export interface LarkBridgeConfig {
   ssoOkMarker?: string
   /**
    * Per-tier model routes: `presetId:provider:model` pairs (e.g.
-   * `bytedance:trae-official:Doubao-Seed-2.1-Pro`). Chats pinned to that
-   * preset route their agents through that provider/model, overriding the
-   * global default but not a per-chat `/model`. The tier itself carries the
-   * SSO gate. Falls back to `DSH_LARK_PRESET_MODELS`.
+   * `internal:acme-provider:acme-model`). Chats pinned to that preset route
+   * their agents through that provider/model, overriding the global default
+   * but not a per-chat `/model`. The tier itself carries the SSO gate. Falls
+   * back to `DSH_LARK_PRESET_MODELS`.
    */
   presetModels?: Record<string, { provider: string; model: string }>
 }

@@ -50,10 +50,23 @@ if [ ! -f "$PROJECT_DIR/lib/index.js" ]; then
     exit 1
   fi
   echo "==> building plugin (pnpm install && pnpm build)"
-  (cd "$PROJECT_DIR" && pnpm install && pnpm build)
+  if ! (cd "$PROJECT_DIR" && pnpm install && pnpm build); then
+    echo "ERROR: build failed — refusing to install an unbuilt plugin (dsh would fail to load lib/index.js)." >&2
+    exit 1
+  fi
 else
   echo "    build  : lib/ present, skipping build"
 fi
+
+# 2b. Hard gate: the plugin entry MUST exist before we register it, or dsh
+#     loads an empty package and the host fails to boot. This is the single
+#     most common install failure, so verify it explicitly.
+if [ ! -f "$PROJECT_DIR/lib/index.js" ]; then
+  echo "ERROR: $PROJECT_DIR/lib/index.js is missing after build. Not registering." >&2
+  echo "       Run 'pnpm install && pnpm build' in $PROJECT_DIR and check for errors." >&2
+  exit 1
+fi
+echo "    entry  : lib/index.js present (ok)"
 
 # 3. Install the access-tier presets into the harness-home preset root.
 #    dsh discovers presets under $DSH_HOME/.agent-presets (uncached — visible

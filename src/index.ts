@@ -29,11 +29,14 @@ import { runRegister } from './register.js'
 export const name = 'lark-bridge'
 
 /**
- * Core services this plugin drives: the agent factory, the session registry,
- * the preset registry (toolset + prompt), and the default-model service (the
- * agent's LLM route — without it a turn ends with no model call).
+ * The ONLY service this plugin truly requires: the agent factory (`agents`).
+ * Everything else — `agentPresets`, `agentDefaultModel`, `llm`,
+ * `sessionPersistence` — is read via `ctx.get` (optional) when present, so a
+ * deployment lacking them still boots the plugin (it degrades, never crashes
+ * the host). A listed-but-missing inject makes cordis fail the ENTIRE
+ * application at load, so this list is deliberately minimal.
  */
-export const inject = ['agents', 'sessions', 'agentPresets', 'agentDefaultModel']
+export const inject = ['agents']
 
 export { Config }
 export type { LarkBridgeConfig }
@@ -47,10 +50,23 @@ type LogFn = (level: 'info' | 'warn' | 'error', msg: string, extra?: unknown) =>
  * completes. Registers a disposer so a plugin reload or host shutdown tears the
  * channel and every agent down cleanly. A `cancelled` flag makes the wizard
  * path a no-op if the plugin is disposed mid-registration.
+ *
+ * The whole body is wrapped so that ANY failure here — a config error, an
+ * incompatible host API, a bad import surfacing at call time — is logged and
+ * contained. A bridge that cannot start must never take the dsh host down
+ * with it; the worst outcome is "the bot is offline", never "dsh won't boot".
  */
 export function apply(ctx: Context, config: LarkBridgeConfig = {}): void {
   const log = makeLogger(ctx)
+  try {
+    applyInner(ctx, config, log)
+  } catch (err) {
+    log('error', 'dsh-lark-bridge failed to initialize — the bot is offline, but dsh is unaffected', err)
+  }
+}
 
+/** The real entry body; {@link apply} contains any failure it throws. */
+function applyInner(ctx: Context, config: LarkBridgeConfig, log: LogFn): void {
   ctx.effect(() => {
     let cancelled = false
     let bridge: LarkBridge | undefined
@@ -124,15 +140,5 @@ function makeLogger(ctx: Context): LogFn {
   return (level, msg, extra) => {
     // eslint-disable-next-line no-console
     console[level](`[dsh-lark-bridge] ${msg}`, extra ?? '')
-  }
-}
-
-/** Best-effort stringify for log extras (errors, objects). */
-function safeStringify(value: unknown): string {
-  if (value instanceof Error) return value.stack ?? value.message
-  try {
-    return JSON.stringify(value)
-  } catch {
-    return String(value)
   }
 }
