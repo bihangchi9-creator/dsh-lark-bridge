@@ -214,7 +214,7 @@ export DSH_LARK_ALLOWED_USERS="ou_friend"
 
 preset 是 dsh 的"工具集组合"概念：宿主沙箱对所有 preset 一致，档位的可执行差异 = **哪些工具存在**。工作区档把攻击面的皇冠（任意代码执行 + 网络出口 + 委托）整个拿掉。
 
-安装 preset（复制到 dsh 的 harness-home 用户根目录即可，发现无缓存）：
+安装 preset：`pnpm setup` / `pnpm setup:win` 会自动把它们装进 dsh 的 harness-home 用户根目录。手动安装（发现无缓存）：
 
 ```bash
 # 把项目里的 presets/ 装进 dsh 的 preset 根

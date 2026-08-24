@@ -63,13 +63,27 @@ else {
     Write-Host '    build  : lib/ present, skipping build'
 }
 
-# 3. The profile must exist (first `dsh web` run creates it)
+# 3. Install the access-tier presets into the harness-home preset root
+#    ($DSH_HOME\.agent-presets). dsh discovers presets there (uncached); without
+#    them the workspace/read-only tiers fall back to the deployment default.
+$PresetRoot = Join-Path $DshHome '.agent-presets'
+$ShippedPresets = Join-Path $ProjectDir 'presets'
+if (Test-Path $ShippedPresets) {
+    New-Item -ItemType Directory -Force -Path $PresetRoot | Out-Null
+    Copy-Item -Path (Join-Path $ShippedPresets '*') -Destination $PresetRoot -Recurse -Force
+    Write-Host "==> presets installed: $PresetRoot\lark-workspace, $PresetRoot\lark-readonly"
+}
+else {
+    Write-Host '    presets: none shipped in this checkout - skipping'
+}
+
+# 4. The profile must exist (first `dsh web` run creates it)
 if (-not (Test-Path $ProfileDir)) {
     Write-Error "profile '$Profile' does not exist yet. Start dsh once (e.g. 'dsh web') so the profile is created, then re-run this script."
     exit 1
 }
 
-# 4. Link the plugin into the profile's node_modules.
+# 5. Link the plugin into the profile's node_modules.
 #    Windows: directory junction (no admin rights needed).
 #    macOS/Linux (pwsh): symbolic link — `-ItemType Junction` is a silent
 #    no-op on Unix, so branch on the OS explicitly.
@@ -101,7 +115,7 @@ else {
     Write-Host "==> linked $Link -> $ProjectDir"
 }
 
-# 5. Register the bundle in the profile manifest (idempotent)
+# 6. Register the bundle in the profile manifest (idempotent)
 $pkg = Get-Content $Manifest -Raw | ConvertFrom-Json
 if ($null -eq $pkg.dsh) {
     $pkg | Add-Member -NotePropertyName 'dsh' -NotePropertyValue ([pscustomobject]@{})

@@ -4,9 +4,11 @@
 # What it does:
 #   1. preflight: Node version / pnpm / dsh profile
 #   2. build the plugin if lib/ is missing
-#   3. symlink the plugin into the profile's node_modules
-#   4. register "dsh-lark-bridge" in the profile's dsh.profile.bundles
-#   5. print next steps
+#   3. install the lark-workspace / lark-readonly presets into the dsh
+#      harness-home preset root ($DSH_HOME/.agent-presets)
+#   4. symlink the plugin into the profile's node_modules
+#   5. register "dsh-lark-bridge" in the profile's dsh.profile.bundles
+#   6. print next steps
 #
 # After this, a bare `dsh web` loads the plugin automatically — no --patch flag.
 #
@@ -53,14 +55,28 @@ else
   echo "    build  : lib/ present, skipping build"
 fi
 
-# 3. The profile must exist (first `dsh web` run creates it)
+# 3. Install the access-tier presets into the harness-home preset root.
+#    dsh discovers presets under $DSH_HOME/.agent-presets (uncached — visible
+#    on the next mount); without them the workspace/read-only tiers fall back
+#    to the deployment default with a warning, silently losing the
+#    blast-radius reduction.
+if [ -d "$PROJECT_DIR/presets" ]; then
+  PRESET_ROOT="$DSH_HOME/.agent-presets"
+  mkdir -p "$PRESET_ROOT"
+  cp -R "$PROJECT_DIR/presets/." "$PRESET_ROOT/"
+  echo "==> presets installed: $PRESET_ROOT/lark-workspace, $PRESET_ROOT/lark-readonly"
+else
+  echo "    presets: none shipped in this checkout — skipping"
+fi
+
+# 4. The profile must exist (first `dsh web` run creates it)
 if [ ! -d "$PROFILE_DIR" ]; then
   echo "ERROR: profile '$PROFILE' does not exist yet." >&2
   echo "       Start dsh once (e.g. 'dsh web') so the profile is created, then re-run this script." >&2
   exit 1
 fi
 
-# 4. Symlink the plugin into the profile's node_modules (bundle resolution anchor)
+# 5. Symlink the plugin into the profile's node_modules (bundle resolution anchor)
 mkdir -p "$PROFILE_DIR/node_modules"
 LINK="$PROFILE_DIR/node_modules/dsh-lark-bridge"
 if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
@@ -74,7 +90,7 @@ else
   echo "==> link already present: $LINK"
 fi
 
-# 5. Register the plugin. Prefer the official `dsh plugin` command (it runs
+# 6. Register the plugin. Prefer the official `dsh plugin` command (it runs
 #    `pnpm add` in the profile and auto-reconciles dsh.profile.bundles);
 #    fall back to the manual symlink + manifest edit when `dsh` is not on PATH.
 if command -v dsh >/dev/null 2>&1; then

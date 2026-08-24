@@ -234,7 +234,9 @@ every preset, so the enforceable difference between tiers is **which tools
 exist**. The workspace tier removes the crown jewels of the attack surface —
 arbitrary code execution, network egress, and delegation.
 
-Install the presets into the harness-home user root (discovery is uncached):
+The setup scripts (`pnpm setup` / `pnpm setup:win`) install the presets into
+the harness-home user root automatically. Manual install (discovery is
+uncached):
 
 ```bash
 mkdir -p ~/.dsh/.agent-presets
