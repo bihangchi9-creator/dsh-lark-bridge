@@ -1,0 +1,36 @@
+{
+  "name": "dsh-tool-lark-cli",
+  "version": "0.0.1",
+  "description": "A dsh tool that runs lark-cli (Feishu/Lark CLI) commands from an agent — Feishu operations inside agent presets.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-tool",
+    "feishu",
+    "lark",
+    "lark-cli"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/schemastery": "*"
+  }
+}

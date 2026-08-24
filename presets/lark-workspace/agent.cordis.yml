@@ -41,6 +41,17 @@
   config:
     allowParallelInProgress: true
 
+# ── Feishu CLI ──────────────────────────────────────────────────────────────
+# Lets the agent operate Feishu through the deployment's lark-cli (IM, docs,
+# sheets, calendar, …) WITHOUT a shell: commands spawn as an argv array (no
+# shell injection) with a timeout and output cap. Requires `lark-cli` on PATH
+# (the host launch environment) and a completed `lark-cli config init` +
+# `auth login`. Tighten further with `allowedPrefixes`.
+- id: tool-lark-cli
+  name: 'dsh-tool-lark-cli'
+  config:
+    timeoutMs: 60000
+
 # ── compaction (keeps long group sessions from blowing context) ─────────────
 - id: compaction
   name: cordis:group
