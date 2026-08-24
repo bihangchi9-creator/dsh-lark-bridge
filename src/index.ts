@@ -116,17 +116,14 @@ export function apply(ctx: Context, config: LarkBridgeConfig = {}): void {
   }, 'lark-bridge.connect()')
 }
 
-/** Build the level-aware logger, preferring the Cordis logger when present. */
+/** Build the level-aware logger. Always writes to the process console so
+ * operator logs reach the host's captured stdout (e.g. the launchd log
+ * file); the cordis `ctx.logger` is NOT used because its output does not
+ * land on the process stdout and would be invisible to tail-based debugging. */
 function makeLogger(ctx: Context): LogFn {
   return (level, msg, extra) => {
-    const logger = (ctx as unknown as { logger?: Record<string, (...args: unknown[]) => void> })
-      .logger
-    if (logger && typeof logger[level] === 'function') {
-      logger[level](extra !== undefined ? `${msg} ${safeStringify(extra)}` : msg)
-    } else {
-      // eslint-disable-next-line no-console
-      console[level](`[dsh-lark-bridge] ${msg}`, extra ?? '')
-    }
+    // eslint-disable-next-line no-console
+    console[level](`[dsh-lark-bridge] ${msg}`, extra ?? '')
   }
 }
 
