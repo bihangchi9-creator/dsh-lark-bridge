@@ -226,7 +226,7 @@ Even after the access gate passes, what an agent may touch is tiered
 | Tier | Preset | What the agent can do |
 |---|---|---|
 | `read-only` | `lark-readonly` | search/read files only — no writes, no shell, no network |
-| `workspace` (default) | `lark-workspace` | read/write/edit files; **no shell, no network, no subagents** (no arbitrary code execution) |
+| `workspace` (default) | `lark-workspace` | read/write/edit files; **no shell, no network, no subagents** (no arbitrary code execution). Ships with a `lark_cli` tool: Feishu operations (IM, docs, sheets, calendar, …) via the host's authenticated `lark-cli`, spawned as an argv array with a timeout and output cap — Feishu power without opening a shell |
 | `full` | deployment default | everything the host offers (shell, network, subagents) |
 
 Presets are dsh's *toolset compositions*: the host sandbox is identical for

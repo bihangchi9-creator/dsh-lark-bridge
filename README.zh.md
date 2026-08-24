@@ -209,7 +209,7 @@ export DSH_LARK_ALLOWED_USERS="ou_friend"
 | 档位 | preset | agent 能做什么 |
 |---|---|---|
 | `read-only` | `lark-readonly` | 只能搜索/读取文件——不能写、不能执行、不能联网 |
-| `workspace`（默认） | `lark-workspace` | 读写/编辑文件；**没有 shell、没有网络、没有子代理**（不可执行任意代码） |
+| `workspace`（默认） | `lark-workspace` | 读写/编辑文件；**没有 shell、没有网络、没有子代理**（不可执行任意代码）。自带 `lark_cli` 工具：通过宿主已授权的 `lark-cli` 操作飞书（IM、文档、表格、日历……），以 argv 数组 spawn、带超时和输出上限——有飞书能力，但不开放 shell |
 | `full` | 部署默认 | 宿主提供的全部能力（含 bash、网络、子代理） |
 
 preset 是 dsh 的"工具集组合"概念：宿主沙箱对所有 preset 一致，档位的可执行差异 = **哪些工具存在**。工作区档把攻击面的皇冠（任意代码执行 + 网络出口 + 委托）整个拿掉。
