@@ -158,14 +158,36 @@ export function tryResolveConfig(config: LarkBridgeConfig): ResolvedConfig | und
     allowDm: config.allowDm ?? envBool(env.DSH_LARK_ALLOW_DM, true),
     requireMention: config.requireMention ?? envBool(env.DSH_LARK_REQUIRE_MENTION, true),
     ownerId: saved?.ownerId,
-    allowedChats: config.allowedChats ?? envList(env.DSH_LARK_ALLOWED_CHATS),
-    allowedUsers: config.allowedUsers ?? envList(env.DSH_LARK_ALLOWED_USERS),
+    // NOTE: schemastery materializes empty arrays/objects for absent list/dict
+    // fields (e.g. `[]` for Schema.array, `{}` for Schema.dict), so a bare
+    // `?? env` fallback is defeated by the empty default. Use emptiness-aware
+    // resolution instead — an empty configured list means "use the env".
+    allowedChats: hasItems(config.allowedChats)
+      ? config.allowedChats
+      : envList(env.DSH_LARK_ALLOWED_CHATS),
+    allowedUsers: hasItems(config.allowedUsers)
+      ? config.allowedUsers
+      : envList(env.DSH_LARK_ALLOWED_USERS),
     accessMode: parseAccessMode(config.accessMode ?? env.DSH_LARK_ACCESS_MODE, 'workspace'),
-    extraPresets: config.extraPresets ?? parsePresetPairs(env.DSH_LARK_EXTRA_PRESETS),
-    ssoGatedPresets: config.ssoGatedPresets ?? envList(env.DSH_LARK_SSO_GATED_PRESETS),
+    extraPresets: hasKeys(config.extraPresets)
+      ? config.extraPresets
+      : parsePresetPairs(env.DSH_LARK_EXTRA_PRESETS),
+    ssoGatedPresets: hasItems(config.ssoGatedPresets)
+      ? config.ssoGatedPresets
+      : envList(env.DSH_LARK_SSO_GATED_PRESETS),
     ssoCheckCmd: config.ssoCheckCmd ?? env.DSH_LARK_SSO_CHECK_CMD,
     ssoOkMarker: config.ssoOkMarker ?? env.DSH_LARK_SSO_OK_MARKER ?? 'Authenticated',
   }
+}
+
+/** True only for a list with at least one item. */
+function hasItems(list: string[] | undefined): list is string[] {
+  return list !== undefined && list.length > 0
+}
+
+/** True only for a record with at least one key. */
+function hasKeys(record: Record<string, string> | undefined): record is Record<string, string> {
+  return record !== undefined && Object.keys(record).length > 0
 }
 
 /** Parse `"id:presetName,id2:name2"` into a record (invalid pairs are dropped). */
