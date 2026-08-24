@@ -43,6 +43,12 @@ describe('parseCommand', () => {
     expect(parseCommand('/whoami')).toEqual({ kind: 'whoami' })
   })
 
+  it('parses /preset with and without a value', () => {
+    expect(parseCommand('/preset')).toEqual({ kind: 'preset', value: undefined })
+    expect(parseCommand('/preset internal')).toEqual({ kind: 'preset', value: 'internal' })
+    expect(parseCommand('/preset   workspace  ')).toEqual({ kind: 'preset', value: 'workspace' })
+  })
+
   it('flags unknown commands with their name', () => {
     expect(parseCommand('/frobnicate x')).toEqual({ kind: 'unknown', name: 'frobnicate' })
   })

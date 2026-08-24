@@ -60,6 +60,28 @@ export interface LarkBridgeConfig {
    * deployment default. Falls back to `DSH_LARK_ACCESS_MODE`.
    */
   accessMode?: AccessMode
+  /**
+   * Additional `/preset` tiers beyond the shipped three, as
+   * `id:preset-name` pairs (e.g. an internal-only preset that stays out of
+   * the public repo). Falls back to `DSH_LARK_EXTRA_PRESETS`
+   * (`"id:name,id2:name2"`).
+   */
+  extraPresets?: Record<string, string>
+  /**
+   * Preset ids whose switch requires a successful host SSO check before
+   * taking effect (fail-closed). Falls back to `DSH_LARK_SSO_GATED_PRESETS`.
+   */
+  ssoGatedPresets?: string[]
+  /**
+   * The command that proves host SSO, e.g. `corp-cli auth status` (argv
+   * tokens). Unset = no SSO gate. Falls back to `DSH_LARK_SSO_CHECK_CMD`.
+   */
+  ssoCheckCmd?: string
+  /**
+   * Text that must appear in the SSO check's output (exit 0 AND marker).
+   * Falls back to `DSH_LARK_SSO_OK_MARKER`, default `Authenticated`.
+   */
+  ssoOkMarker?: string
 }
 
 export const Config: Schema<LarkBridgeConfig> = Schema.object({
@@ -74,6 +96,10 @@ export const Config: Schema<LarkBridgeConfig> = Schema.object({
   allowedChats: Schema.array(Schema.string()),
   allowedUsers: Schema.array(Schema.string()),
   accessMode: Schema.union(['read-only', 'workspace', 'full'] as const),
+  extraPresets: Schema.dict(Schema.string()),
+  ssoGatedPresets: Schema.array(Schema.string()),
+  ssoCheckCmd: Schema.string(),
+  ssoOkMarker: Schema.string(),
 })
 
 /** The fully-resolved config after environment fallback; secrets are guaranteed present. */
@@ -91,6 +117,10 @@ export interface ResolvedConfig {
   allowedChats: string[]
   allowedUsers: string[]
   accessMode: AccessMode
+  extraPresets: Record<string, string>
+  ssoGatedPresets: string[]
+  ssoCheckCmd?: string
+  ssoOkMarker: string
 }
 
 /** Read a boolean-ish env var (`1/true/yes/on` = true), returning `fallback` when unset. */
@@ -131,7 +161,22 @@ export function tryResolveConfig(config: LarkBridgeConfig): ResolvedConfig | und
     allowedChats: config.allowedChats ?? envList(env.DSH_LARK_ALLOWED_CHATS),
     allowedUsers: config.allowedUsers ?? envList(env.DSH_LARK_ALLOWED_USERS),
     accessMode: parseAccessMode(config.accessMode ?? env.DSH_LARK_ACCESS_MODE, 'workspace'),
+    extraPresets: config.extraPresets ?? parsePresetPairs(env.DSH_LARK_EXTRA_PRESETS),
+    ssoGatedPresets: config.ssoGatedPresets ?? envList(env.DSH_LARK_SSO_GATED_PRESETS),
+    ssoCheckCmd: config.ssoCheckCmd ?? env.DSH_LARK_SSO_CHECK_CMD,
+    ssoOkMarker: config.ssoOkMarker ?? env.DSH_LARK_SSO_OK_MARKER ?? 'Authenticated',
   }
+}
+
+/** Parse `"id:presetName,id2:name2"` into a record (invalid pairs are dropped). */
+function parsePresetPairs(value: string | undefined): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (value === undefined || value.trim() === '') return out
+  for (const pair of value.split(',')) {
+    const [id, name] = pair.split(':').map(part => part.trim())
+    if (id && name) out[id] = name
+  }
+  return out
 }
 
 /** Parse a comma-separated env list into a trimmed string array (empty when unset). */

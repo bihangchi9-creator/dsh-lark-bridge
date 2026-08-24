@@ -12,15 +12,18 @@
 
 import type { LarkChannel, LarkChannelOptions, NormalizedMessage } from '@larksuite/channel'
 import { createLarkChannel } from '@larksuite/channel'
+import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { decideAccess } from './access.js'
 import { AllowlistStore, allowlistPath } from './allowlist.js'
 import { downloadAttachments } from './attachments.js'
 import { buildBridgePrompt, type BridgePromptAttachment } from './bridge-prompt.js'
+import { ChatPresetStore, chatPresetPath, isPresetId, presetNameFor } from './chat-preset.js'
 import { parseCommand, HELP_TEXT } from './commands.js'
 import { domainFor, type ResolvedConfig } from './config.js'
 import { saveOwnerId } from './credentials.js'
 import { DshBinding, type BridgeEvent } from './dsh-binding.js'
+import { splitArgs } from './split-args.js'
 import { resolveWorkspace } from './workspace.js'
 
 /** Coalesce streamed deltas so we do not spam Feishu with one edit per token. */
@@ -60,6 +63,8 @@ export class LarkBridge {
   private ownerRefreshTimer: ReturnType<typeof setInterval> | undefined
   /** Command-managed chat allowlist (owner `/allow` / `/disallow`). */
   private readonly allowlist: AllowlistStore
+  /** Per-chat preset overrides (owner `/preset`, persisted). */
+  private readonly chatPresets: ChatPresetStore
 
   constructor(
     private readonly config: ResolvedConfig,
@@ -81,6 +86,8 @@ export class LarkBridge {
     this.channel = createLarkChannel(opts)
     this.ownerId = config.ownerId
     this.allowlist = new AllowlistStore(allowlistPath())
+    this.chatPresets = new ChatPresetStore(chatPresetPath())
+    this.allowlist = new AllowlistStore(allowlistPath())
   }
 
   /** The effective access controls: config/env allowlists + command-managed store. */
@@ -99,6 +106,47 @@ export class LarkBridge {
   /** Whether the sender is the app owner (admin commands). Fail-closed when unknown. */
   private isOwner(msg: NormalizedMessage): boolean {
     return this.ownerId !== undefined && msg.senderId === this.ownerId
+  }
+
+  /**
+   * Verify host SSO before enabling a gated tier (`DSH_LARK_SSO_GATED_PRESETS`).
+   * Runs `DSH_LARK_SSO_CHECK_CMD` (argv tokens, no shell) and requires exit 0
+   * AND the `DSH_LARK_SSO_OK_MARKER` in its output. Fail-closed — no checker
+   * configured, any error, timeout, or unclear output counts as not verified.
+   */
+  private verifySso(): Promise<boolean> {
+    const cmd = this.config.ssoCheckCmd
+    if (!cmd) return Promise.resolve(false)
+    const argv = splitArgs(cmd)
+    if (argv.length === 0) return Promise.resolve(false)
+    const marker = this.config.ssoOkMarker
+    return new Promise(resolve => {
+      const child = spawn(argv[0]!, argv.slice(1), {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
+      let out = ''
+      let settled = false
+      const finish = (ok: boolean): void => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve(ok)
+      }
+      const timer = setTimeout(() => {
+        child.kill('SIGKILL')
+        finish(false)
+      }, 10_000)
+      child.stdout?.on('data', (chunk: Buffer) => {
+        out += chunk.toString()
+      })
+      child.stderr?.on('data', (chunk: Buffer) => {
+        out += chunk.toString()
+      })
+      child.on('error', () => finish(false))
+      child.on('close', code => {
+        finish(code === 0 && marker.length > 0 && out.includes(marker))
+      })
+    })
   }
 
   /** Connect the WebSocket and start handling messages. */
@@ -291,6 +339,49 @@ export class LarkBridge {
         await this.reply(msg, `🤖 Model set to \`${command.value}\` and session reset.`)
         return
       }
+      case 'preset': {
+        if (!this.isOwner(msg)) {
+          await this.reply(msg, '🔒 只有机器人 owner 可以切换档位。')
+          return
+        }
+        const extraIds = new Set(Object.keys(this.config.extraPresets))
+        const value = command.value
+        if (value === undefined || value === '') {
+          const current = this.chatPresets.get(msg.chatId) ?? this.config.accessMode
+          const extras = Object.keys(this.config.extraPresets)
+            .map(id => `\`/preset ${id}\``)
+            .join(' ')
+          await this.reply(
+            msg,
+            `🎚️ 本群档位: \`${current}\`\n可切换: \`/preset workspace\` \`/preset read-only\` \`/preset full\`${extraIds.size > 0 ? ' ' + [...extraIds].map(id => `\`/preset ${id}\``).join(' ') : ''}`,
+          )
+          return
+        }
+        if (!isPresetId(value, extraIds)) {
+          await this.reply(
+            msg,
+            `❓ 未知档位 \`${value}\`。可用: workspace / read-only / full${extraIds.size > 0 ? ' / ' + [...extraIds].join(' / ') : ''}。`,
+          )
+          return
+        }
+        // SSO-gated tiers (configured via DSH_LARK_SSO_GATED_PRESETS) must
+        // prove host SSO BEFORE the switch — fail-closed, so a gated tier can
+        // never be enabled without valid host credentials.
+        if (this.config.ssoGatedPresets.includes(value) && !(await this.verifySso())) {
+          await this.reply(
+            msg,
+            `❌ 无法启用 \`${value}\` 档：宿主 SSO 校验未通过（${this.config.ssoCheckCmd ?? '未配置校验命令'}）。`,
+          )
+          return
+        }
+        if (value === 'workspace') this.chatPresets.clear(msg.chatId)
+        else this.chatPresets.set(msg.chatId, value)
+        // Preset is part of the session fingerprint — disposing rotates to a
+        // fresh generation, so no old context carries into the new tier.
+        await this.binding.dispose(msg.chatId)
+        await this.reply(msg, `🎚️ 本群已切换到 \`${value}\` 档（新会话生效）。`)
+        return
+      }
       case 'unknown':
         await this.reply(msg, `❓ Unknown command: \`/${command.name}\`. Try \`/help\`.`)
         return
@@ -350,7 +441,13 @@ export class LarkBridge {
   ): Promise<void> {
     const cwd = await resolveWorkspace(this.config.workspaceRoot, chatId)
     const modelOverride = this.chatModels.get(chatId)
-    const route = modelOverride ? { model: modelOverride } : undefined
+    // Per-chat preset override (owner `/preset`); `undefined` falls back to
+    // the accessMode-derived preset from the plugin route. `full` maps to the
+    // deployment default.
+    const presetId = this.chatPresets.get(chatId)
+    const route: { model?: string; preset?: string } = {}
+    if (modelOverride !== undefined) route.model = modelOverride
+    if (presetId !== undefined) route.preset = presetNameFor(presetId, this.config.extraPresets)
 
     // Attachments: download images/files into the chat's workspace and hand
     // the paths to the agent (read_image / file reads). Rejections are

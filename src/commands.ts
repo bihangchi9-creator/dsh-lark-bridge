@@ -14,6 +14,7 @@ export type Command =
   | { kind: 'new' }
   | { kind: 'where' }
   | { kind: 'model'; value?: string }
+  | { kind: 'preset'; value?: string }
   | { kind: 'allow' }
   | { kind: 'disallow' }
   | { kind: 'whoami' }
@@ -40,6 +41,8 @@ export function parseCommand(text: string): Command | undefined {
       return { kind: 'where' }
     case 'model':
       return { kind: 'model', value: arg.length > 0 ? arg : undefined }
+    case 'preset':
+      return { kind: 'preset', value: arg.length > 0 ? arg : undefined }
     case 'allow':
       return { kind: 'allow' }
     case 'disallow':
