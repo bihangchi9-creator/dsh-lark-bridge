@@ -74,8 +74,19 @@ else
   echo "==> link already present: $LINK"
 fi
 
-# 5. Register the bundle in the profile manifest (idempotent)
-"$NODE_BIN" - "$MANIFEST" <<'EOF'
+# 5. Register the plugin. Prefer the official `dsh plugin` command (it runs
+#    `pnpm add` in the profile and auto-reconciles dsh.profile.bundles);
+#    fall back to the manual symlink + manifest edit when `dsh` is not on PATH.
+if command -v dsh >/dev/null 2>&1; then
+  echo "==> registering via official command: dsh plugin --profile $PROFILE add link:$PROJECT_DIR"
+  dsh plugin --profile "$PROFILE" add "link:$PROJECT_DIR"
+elif [ -x "$PROJECT_DIR/node_modules/.bin/dsh" ]; then
+  echo "==> registering via official command (repo-local dsh): ..."
+  "$PROJECT_DIR/node_modules/.bin/dsh" plugin --profile "$PROFILE" add "link:$PROJECT_DIR"
+else
+  # Manual fallback (no `dsh` on PATH): the symlink from step 4 is the
+  # resolution anchor; just append the package name to dsh.profile.bundles.
+  "$NODE_BIN" - "$MANIFEST" <<'EOF'
 const fs = require('fs')
 const path = process.argv[2]
 const pkg = JSON.parse(fs.readFileSync(path, 'utf8'))
@@ -90,6 +101,7 @@ pkg.dsh.profile.bundles = [...bundles, 'dsh-lark-bridge']
 fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n')
 console.log('==> registered dsh-lark-bridge bundle in ' + path)
 EOF
+fi
 
 echo
 echo "==> Done. Next steps:"

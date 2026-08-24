@@ -42,7 +42,16 @@
 
 ## 安装
 
-### 方式一：一键安装（推荐）
+### 方式一：dsh 官方命令（已装好 dsh 时推荐）
+
+```bash
+# 从你的 dsh 代码库目录执行；`link:` 指向本项目目录
+dsh plugin --profile web add link:/path/to/dsh-lark-bridge
+```
+
+`dsh plugin` 会在 profile 目录里执行 `pnpm add`，并**自动把声明了 `dsh.bundle` 的包加进 `dsh.profile.bundles`**——装完即注册，重启后自动加载，无需 `--patch`、无需手动改配置。卸载/升级同样是官方命令：`dsh plugin --profile web remove dsh-lark-bridge` / `dsh plugin --profile web update dsh-lark-bridge`。
+
+### 方式二：一键脚本（推荐）
 
 ```bash
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
@@ -51,7 +60,7 @@ pnpm setup            # macOS / Linux（脚本: scripts/setup.sh）
 pnpm setup:win        # Windows（脚本: scripts/setup.ps1）
 ```
 
-脚本会：预检 Node 版本 → 构建插件 → 把插件链接进 dsh profile → **注册为 bundle**。
+脚本会：预检 Node 版本 → 构建插件 → 把插件链接进 dsh profile → **注册为 bundle**（`dsh` 可用时内部直接走方式一的官方命令）。
 之后直接启动即可，**不需要 `--patch` 参数**：
 
 ```bash
@@ -64,7 +73,7 @@ $env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 
 > 换 profile：`DSH_PROFILE=headless pnpm setup`；自定义 dsh 目录：`DSH_HOME=/path/.dsh pnpm setup`（Windows 同样支持这两个环境变量）。
 
-### 方式二：手动安装（源码模式）
+### 方式三：手动安装（源码模式）
 
 由于 dsh 的公开 npm 依赖图还不完整，建议以「源码模式」和你的 dsh 代码库放在一起安装。
 

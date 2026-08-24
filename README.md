@@ -42,7 +42,21 @@ The bot **registration lives entirely on Feishu**, not in dsh. dsh only *loads t
 
 ## Install
 
-### Option 1: one-command setup (recommended)
+### Option 1: official `dsh plugin` command (recommended when dsh is installed)
+
+```bash
+# run from your dsh checkout; `link:` points at this project directory
+dsh plugin --profile web add link:/path/to/dsh-lark-bridge
+```
+
+`dsh plugin` runs `pnpm add` in the profile directory and **auto-reconciles
+`dsh.profile.bundles`**: a package that declares `dsh.bundle` joins the layer
+stack automatically — installed and registered in one line, loaded after the
+next restart, with no `--patch` and no manual config edits. Remove/update with
+the same family: `dsh plugin --profile web remove dsh-lark-bridge` /
+`dsh plugin --profile web update dsh-lark-bridge`.
+
+### Option 2: one-command setup (recommended)
 
 ```bash
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
@@ -52,8 +66,9 @@ pnpm setup:win        # Windows (scripts/setup.ps1)
 ```
 
 The script preflights your Node version, builds the plugin, links it into the
-dsh profile, and **registers it as a bundle**. After that, launch dsh directly —
-**no `--patch` flag needed**:
+dsh profile, and **registers it as a bundle** (when `dsh` is on PATH it
+delegates to Option 1's official command internally). After that, launch dsh
+directly — **no `--patch` flag needed**:
 
 ```bash
 # macOS / Linux
@@ -65,7 +80,7 @@ $env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 
 > Different profile: `DSH_PROFILE=headless pnpm setup`; custom dsh home: `DSH_HOME=/path/.dsh pnpm setup` (both env vars work on Windows too).
 
-### Option 2: manual install (source mode)
+### Option 3: manual install (source mode)
 
 Because the dsh public npm graph is still partial, install from source alongside your dsh checkout.
 
