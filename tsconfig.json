@@ -24,16 +24,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "lib",
-    "rootDir": "src",
-
-    "baseUrl": ".",
-    "paths": {
-      "@deepseek-ai/cordis": ["../deepseek-harness/vendor/cordis/lib/types/index.d.ts"],
-      "@deepseek-ai/schemastery": ["../deepseek-harness/vendor/schemastery/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-llm": ["../deepseek-harness/packages/llm/llm/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-session": ["../deepseek-harness/packages/core/session/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-agent": ["../deepseek-harness/packages/core/agent/lib/types/index.d.ts"]
-    }
+    "rootDir": "src"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "lib"]

@@ -56,6 +56,12 @@ describe('decideAccess — user allowlist (DMs only)', () => {
     )
   })
 
+  it('a chat id in allowedChats does not authorize a p2p conversation', () => {
+    expect(decideAccess(controls, { ...p2p, chatId: 'oc_allowed', senderId: 'ou_stranger' })).toEqual(
+      { ok: false, reason: 'denied' },
+    )
+  })
+
   it('a stranger DM is denied even when the owner is unknown', () => {
     const noOwner: AccessControls = { allowedChats: [], allowedUsers: ['ou_friend'] }
     expect(decideAccess(noOwner, { ...p2p, senderId: 'ou_stranger' })).toEqual({

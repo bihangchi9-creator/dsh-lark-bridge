@@ -1,8 +1,8 @@
 # The dsh-lark-bridge patch layer.
 #
 # A profile that lists this bundle gets one extra plugin row: the Feishu/Lark
-# bridge. It injects the core `agents` service (plus `sessions`), so it creates
-# and drives real dsh agents from inbound Feishu messages.
+# bridge. It requires only the core `agents` service; optional services are
+# resolved with ctx.get() so their absence cannot block the whole dsh host.
 #
 # Config is read from environment variables by default (see src/config.ts), so
 # users normally do not need to edit this file. To override inline, add a
@@ -11,4 +11,4 @@
 - insert:
     - id: lark-bridge
       name: dsh-lark-bridge
-      inject: [agents, sessions, agentPresets, agentDefaultModel]
+      inject: [agents]

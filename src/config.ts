@@ -41,6 +41,8 @@ export interface LarkBridgeConfig {
   allowDm?: boolean
   /** In group chats, require an @-mention of the bot to trigger. Default true. */
   requireMention?: boolean
+  /** Hard deadline for one agent turn. Default 10 minutes; env DSH_LARK_TURN_TIMEOUT_MS. */
+  turnTimeoutMs?: number
   /**
    * Group chat ids (`oc_...`) allowed to drive the bot. Empty = no group
    * allowed (fail-closed). Falls back to `DSH_LARK_ALLOWED_CHATS`
@@ -101,6 +103,7 @@ export const Config: Schema<LarkBridgeConfig> = Schema.object({
   workspaceRoot: Schema.string(),
   allowDm: Schema.boolean(),
   requireMention: Schema.boolean(),
+  turnTimeoutMs: Schema.number(),
   allowedChats: Schema.array(Schema.string()),
   allowedUsers: Schema.array(Schema.string()),
   accessMode: Schema.union(['read-only', 'workspace', 'full'] as const),
@@ -121,6 +124,7 @@ export interface ResolvedConfig {
   workspaceRoot: string
   allowDm: boolean
   requireMention: boolean
+  turnTimeoutMs: number
   /** open_id of the app owner captured at registration, when known. */
   ownerId?: string
   allowedChats: string[]
@@ -137,6 +141,12 @@ export interface ResolvedConfig {
 function envBool(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined || value === '') return fallback
   return /^(1|true|yes|on)$/i.test(value)
+}
+
+/** Resolve a finite positive number from inline config or an env string. */
+function positiveNumber(value: number | string | undefined, fallback: number): number {
+  const parsed = typeof value === 'number' ? value : value === undefined ? NaN : Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
 }
 
 /**
@@ -167,6 +177,10 @@ export function tryResolveConfig(config: LarkBridgeConfig): ResolvedConfig | und
       config.workspaceRoot ?? env.DSH_LARK_WORKSPACE_ROOT ?? `${home}/dsh-lark-workspaces`,
     allowDm: config.allowDm ?? envBool(env.DSH_LARK_ALLOW_DM, true),
     requireMention: config.requireMention ?? envBool(env.DSH_LARK_REQUIRE_MENTION, true),
+    turnTimeoutMs: positiveNumber(
+      config.turnTimeoutMs ?? env.DSH_LARK_TURN_TIMEOUT_MS,
+      10 * 60 * 1000,
+    ),
     ownerId: saved?.ownerId,
     // NOTE: schemastery materializes empty arrays/objects for absent list/dict
     // fields (e.g. `[]` for Schema.array, `{}` for Schema.dict), so a bare

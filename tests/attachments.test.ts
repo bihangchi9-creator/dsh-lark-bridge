@@ -26,10 +26,12 @@ describe('safeAttachmentName', () => {
     expect(safeAttachmentName('a\u0000b\u001fc.txt', 'fb')).toBe('abc.txt')
   })
 
-  it('caps length and falls back when empty', () => {
+  it('caps length and falls back for empty or special path components', () => {
     expect(safeAttachmentName('x'.repeat(500), 'fb')).toHaveLength(120)
     expect(safeAttachmentName('   ', 'fb')).toBe('fb')
     expect(safeAttachmentName(undefined, 'fb')).toBe('fb')
+    expect(safeAttachmentName('.', 'fb')).toBe('fb')
+    expect(safeAttachmentName('..', 'fb')).toBe('fb')
   })
 })
 
@@ -114,5 +116,19 @@ describe('downloadAttachments', () => {
     ], dir)
     expect(result.accepted).toHaveLength(2)
     expect(result.accepted[0]!.fileName).not.toBe(result.accepted[1]!.fileName)
+  })
+
+  it('isolates same-named attachments from different messages', async () => {
+    const dir = tmpDir()
+    const channel = fakeChannel()
+    const first = await downloadAttachments(channel, 'om_1', [
+      { type: 'file', fileKey: 'fk-a', fileName: 'same.txt' },
+    ], dir)
+    const second = await downloadAttachments(channel, 'om_2', [
+      { type: 'file', fileKey: 'fk-b', fileName: 'same.txt' },
+    ], dir)
+    expect(first.accepted[0]!.path).not.toBe(second.accepted[0]!.path)
+    expect(existsSync(first.accepted[0]!.path)).toBe(true)
+    expect(existsSync(second.accepted[0]!.path)).toBe(true)
   })
 })

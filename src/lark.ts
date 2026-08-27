@@ -12,7 +12,7 @@
 
 import type { LarkChannel, LarkChannelOptions, NormalizedMessage } from '@larksuite/channel'
 import { createLarkChannel } from '@larksuite/channel'
-import { spawn } from 'node:child_process'
+import spawn from 'cross-spawn'
 import { join } from 'node:path'
 import { decideAccess } from './access.js'
 import { AllowlistStore, allowlistPath } from './allowlist.js'
@@ -38,8 +38,38 @@ const MAX_PENDING_PER_CHAT = 10
 /** Conservative per-message length cap; longer replies are split at newlines. */
 const MAX_REPLY_CHARS = 8000
 
-/** Per-chat model override, chosen via `/model <name>`. */
-type ChatModels = Map<string, string>
+/** Per-chat model override, chosen via `/model <provider>/<model>`. */
+interface ChatModelRoute {
+  provider: string
+  model: string
+}
+type ChatModels = Map<string, ChatModelRoute>
+
+interface ModelCatalogEntry {
+  provider: string
+  models: Array<{ id: string }>
+}
+
+/** Resolve `/model` input against the live catalog; ambiguous/bare ids fail closed. */
+export function resolveModelRoute(
+  value: string,
+  catalog: readonly ModelCatalogEntry[],
+): ChatModelRoute | undefined {
+  const slash = value.indexOf('/')
+  if (slash > 0 && slash < value.length - 1) {
+    const provider = value.slice(0, slash)
+    const model = value.slice(slash + 1)
+    return catalog.some(entry =>
+      entry.provider === provider && entry.models.some(candidate => candidate.id === model),
+    ) ? { provider, model } : undefined
+  }
+  const matches = catalog.flatMap(entry =>
+    entry.models.some(candidate => candidate.id === value)
+      ? [{ provider: entry.provider, model: value }]
+      : [],
+  )
+  return matches.length === 1 ? matches[0] : undefined
+}
 
 /**
  * Owns the channel connection and the message pump. Call {@link connect} to go
@@ -87,7 +117,6 @@ export class LarkBridge {
     this.ownerId = config.ownerId
     this.allowlist = new AllowlistStore(allowlistPath())
     this.chatPresets = new ChatPresetStore(chatPresetPath())
-    this.allowlist = new AllowlistStore(allowlistPath())
   }
 
   /** The effective access controls: config/env allowlists + command-managed store. */
@@ -259,10 +288,14 @@ export class LarkBridge {
         await this.reply(msg, HELP_TEXT)
         return
       case 'new': {
+        if (this.busy.has(msg.chatId)) {
+          await this.reply(msg, '⏳ 当前任务仍在执行，请等待完成后再使用 `/new`。')
+          return
+        }
         // P3: reset must defeat persistence — a sentinel fingerprint makes
         // the next session rotate to a fresh generation, so the old context
         // cannot come back after a restart.
-        this.binding.reset(msg.chatId)
+        await this.binding.reset(msg.chatId)
         await this.reply(msg, '🧹 Started a fresh session for this chat.')
         return
       }
@@ -328,15 +361,34 @@ export class LarkBridge {
         return
       }
       case 'model': {
-        if (!command.value) {
-          const current = this.chatModels.get(msg.chatId) ?? this.config.model ?? '(default)'
-          await this.reply(msg, `🤖 Current model: \`${current}\`\nUse \`/model <name>\` to switch, \`/models\` to list.`)
+        if (!this.isOwner(msg)) {
+          await this.reply(msg, '🔒 只有机器人 owner 可以切换模型。')
           return
         }
-        this.chatModels.set(msg.chatId, command.value)
+        if (this.busy.has(msg.chatId)) {
+          await this.reply(msg, '⏳ 当前任务仍在执行，请等待完成后再切换模型。')
+          return
+        }
+        if (!command.value) {
+          const override = this.chatModels.get(msg.chatId)
+          const current = override
+            ? `${override.provider}/${override.model}`
+            : this.config.provider && this.config.model
+              ? `${this.config.provider}/${this.config.model}`
+              : this.config.model ?? '(default)'
+          await this.reply(msg, `🤖 Current model: \`${current}\`\nUse \`/model <provider>/<model>\` to switch, \`/models\` to list.`)
+          return
+        }
+        const catalog = await this.binding.listModels()
+        const route = resolveModelRoute(command.value, catalog)
+        if (!route) {
+          await this.reply(msg, `❓ 未找到唯一模型 \`${command.value}\`。请用 \`/models\` 查看，并使用 \`/model <provider>/<model>\`。`)
+          return
+        }
+        this.chatModels.set(msg.chatId, route)
         // A model change only takes effect on a fresh session.
         await this.binding.dispose(msg.chatId)
-        await this.reply(msg, `🤖 Model set to \`${command.value}\` and session reset.`)
+        await this.reply(msg, `🤖 Model set to \`${route.provider}/${route.model}\` and session reset.`)
         return
       }
       case 'models': {
@@ -346,7 +398,7 @@ export class LarkBridge {
           await this.reply(msg, '🤖 模型目录不可用（llm 服务未提供）。')
           return
         }
-        const lines: string[] = ['🤖 **可用模型**（`/model <id>` 切换）:']
+        const lines: string[] = ['🤖 **可用模型**（`/model <provider>/<model>` 切换，仅 owner）:']
         for (const p of catalog) {
           const head = p.providerName ?? p.provider
           if (p.models.length === 0) {
@@ -356,7 +408,10 @@ export class LarkBridge {
           lines.push(
             `- **${head}**:\n` +
               p.models
-                .map(m => (m.name && m.name !== m.id ? `  - \`${m.id}\` (${m.name})` : `  - \`${m.id}\``))
+                .map(m => {
+                  const route = `${p.provider}/${m.id}`
+                  return m.name && m.name !== m.id ? `  - \`${route}\` (${m.name})` : `  - \`${route}\``
+                })
                 .join('\n'),
           )
         }
@@ -369,6 +424,10 @@ export class LarkBridge {
       case 'preset': {
         if (!this.isOwner(msg)) {
           await this.reply(msg, '🔒 只有机器人 owner 可以切换档位。')
+          return
+        }
+        if (this.busy.has(msg.chatId)) {
+          await this.reply(msg, '⏳ 当前任务仍在执行，请等待完成后再切换档位。')
           return
         }
         const extraIds = new Set(Object.keys(this.config.extraPresets))
@@ -444,18 +503,21 @@ export class LarkBridge {
       // this the chat's busy flag would stay set forever and every later message
       // would get queued behind a dead turn. Release it here and surface it.
       this.log('error', 'agent turn failed', err)
-      await this.reply(msg, `⚠️ Failed to produce a reply: ${String(err)}`)
+      await this.reply(msg, `⚠️ Failed to produce a reply: ${String(err)}`).catch(replyErr =>
+        this.log('warn', 'could not send turn failure reply', replyErr),
+      )
     } finally {
       this.busy.delete(chatId)
       const queue = this.pending.get(chatId)
       const next = queue?.shift()
       if (queue && queue.length === 0) this.pending.delete(chatId)
       if (next) {
-        const text = next.content?.trim() ?? ''
-        // Image-only messages have empty text — still process them.
-        if (text.length > 0 || (next.resources?.length ?? 0) > 0) {
-          void this.runTurn(next, text)
-        }
+        // Re-enter the complete message pipeline: authorization may have been
+        // revoked while this item waited, and a queued slash command must stay
+        // a command rather than becoming an agent prompt.
+        void this.onMessage(next).catch(err =>
+          this.log('error', 'queued message handler failed', err),
+        )
       }
     }
   }
@@ -472,11 +534,20 @@ export class LarkBridge {
     // the accessMode-derived preset from the plugin route. `full` maps to the
     // deployment default.
     const presetId = this.chatPresets.get(chatId)
+    // A persisted gated tier must re-prove SSO on every turn. The underlying
+    // checker is bounded to 10s and fail-closed; this prevents an expired host
+    // identity from retaining internal capabilities after a restart.
+    if (presetId !== undefined && this.config.ssoGatedPresets.includes(presetId)) {
+      if (!(await this.verifySso())) {
+        throw new Error(`host SSO verification failed for gated preset ${JSON.stringify(presetId)}`)
+      }
+    }
     const route: { model?: string; provider?: string; preset?: string } = {}
     // Precedence: per-chat `/model` override > per-tier model route
     // (DSH_LARK_PRESET_MODELS, an extra tier -> its provider) > global default.
     if (modelOverride !== undefined) {
-      route.model = modelOverride
+      route.provider = modelOverride.provider
+      route.model = modelOverride.model
     } else {
       const tierModel = presetId !== undefined ? this.config.presetModels[presetId] : undefined
       if (tierModel !== undefined) {
@@ -563,9 +634,18 @@ export class LarkBridge {
             }, attachments),
           )
           let shown = ''
+          const deadline = Date.now() + this.config.turnTimeoutMs
           // Poll the buffer and push incremental content until the turn ends.
+          // A provider that never emits turn/end must not wedge this chat
+          // forever; abort the session at the configured hard deadline.
           while (!done) {
-            await delay(STREAM_FLUSH_MS)
+            if (Date.now() >= deadline) {
+              await this.binding.dispose(chatId).catch(err =>
+                this.log('warn', 'failed to dispose timed-out session', err),
+              )
+              throw new Error(`agent turn timed out after ${this.config.turnTimeoutMs}ms`)
+            }
+            await delay(Math.min(STREAM_FLUSH_MS, Math.max(1, deadline - Date.now())))
             if (buffer !== shown) {
               await controller.setContent(buffer)
               shown = buffer

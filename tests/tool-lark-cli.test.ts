@@ -23,6 +23,17 @@ describe('splitArgs', () => {
     expect(splitArgs('echo a\\ b')).toEqual(['echo', 'a b'])
   })
 
+  it('preserves Windows paths inside and outside quotes', () => {
+    expect(splitArgs('open "C:\\Program Files\\Lark\\app.exe"')).toEqual([
+      'open',
+      'C:\\Program Files\\Lark\\app.exe',
+    ])
+    expect(splitArgs('open C:\\Users\\alice\\file.txt')).toEqual([
+      'open',
+      'C:\\Users\\alice\\file.txt',
+    ])
+  })
+
   it('collapses repeated whitespace and empty input', () => {
     expect(splitArgs('  a   b  ')).toEqual(['a', 'b'])
     expect(splitArgs('')).toEqual([])

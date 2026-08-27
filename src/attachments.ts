@@ -67,7 +67,9 @@ export function safeAttachmentName(fileName: string | undefined, fallback: strin
     .replace(/[/\\]/g, '_')
     .replace(/[\u0000-\u001f\u007f]/g, '')
     .slice(0, 120)
-  return cleaned.length > 0 ? cleaned : fallback
+  // `join(dir, '.')` and `join(dir, '..')` resolve to the directory itself or
+  // its parent. Never allow these special path components as file names.
+  return cleaned.length > 0 && cleaned !== '.' && cleaned !== '..' ? cleaned : fallback
 }
 
 /**
@@ -97,6 +99,10 @@ export async function downloadAttachments(
 
   await mkdir(dir, { recursive: true }).catch(() => {})
   await sweepStaleAttachments(dir)
+  // Isolate each message so same-named files from later messages cannot
+  // overwrite an earlier attachment the conversation may still reference.
+  const messageDir = join(dir, safeAttachmentName(messageId, `message-${Date.now()}`))
+  await mkdir(messageDir, { recursive: true }).catch(() => {})
 
   for (let i = 0; i < selected.length; i++) {
     const res = selected[i]!
@@ -106,7 +112,7 @@ export async function downloadAttachments(
     let name = safeAttachmentName(res.fileName, fallback)
     // Avoid collisions between same-named attachments in one message.
     if (accepted.some(a => a.fileName === name)) name = `${i + 1}-${name}`
-    const dest = join(dir, name)
+    const dest = join(messageDir, name)
     try {
       const { bytesWritten } = await channel.downloadResourceToFile(
         messageId,
@@ -139,8 +145,8 @@ async function sweepStaleAttachments(dir: string): Promise<void> {
       const p = join(dir, entry)
       try {
         const info = await stat(p)
-        if (info.isFile() && now - info.mtimeMs > ATTACHMENT_TTL_MS) {
-          await rm(p, { force: true })
+        if (now - info.mtimeMs > ATTACHMENT_TTL_MS) {
+          await rm(p, { force: true, recursive: info.isDirectory() })
         }
       } catch {
         // Unreadable entry — leave it.

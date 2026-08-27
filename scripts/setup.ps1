@@ -42,8 +42,11 @@ if ($nodeMajor -lt 22) {
 }
 Write-Host "    node    : $(& node -v) (ok)"
 
-# 2. Build the plugin if needed
-if (-not (Test-Path (Join-Path $ProjectDir 'lib\index.js'))) {
+# 2. Build the bridge AND its shipped lark-cli tool if either entry is missing.
+#    The workspace preset references dsh-tool-lark-cli, so both are mandatory.
+$BridgeEntry = Join-Path $ProjectDir 'lib\index.js'
+$LarkToolEntry = Join-Path $ProjectDir 'tools\lark-cli\lib\index.js'
+if (-not (Test-Path $BridgeEntry) -or -not (Test-Path $LarkToolEntry)) {
     if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
         Write-Error 'pnpm not found in PATH - needed to build the plugin (or run "corepack enable").'
         exit 1
@@ -63,13 +66,15 @@ else {
     Write-Host '    build  : lib/ present, skipping build'
 }
 
-# 2b. Hard gate: the plugin entry MUST exist before we register it, or dsh
-#     loads an empty package and the host fails to boot.
-if (-not (Test-Path (Join-Path $ProjectDir 'lib\index.js'))) {
-    Write-Error "$ProjectDir\lib\index.js is missing after build. Not registering. Run 'pnpm install; pnpm build' and check for errors."
-    exit 1
+# 2b. Hard gate: both entries MUST exist before registration.
+foreach ($entry in @($BridgeEntry, $LarkToolEntry)) {
+    if (-not (Test-Path $entry)) {
+        Write-Error "$entry is missing after build. Not registering. Run 'pnpm install; pnpm build' and check for errors."
+        exit 1
+    }
 }
-Write-Host '    entry  : lib/index.js present (ok)'
+Write-Host '    entries: bridge + dsh-tool-lark-cli present (ok)'
+$LarkToolDir = Join-Path $ProjectDir 'tools\lark-cli'
 
 
 # 3. Install the access-tier presets into the harness-home preset root
@@ -124,30 +129,65 @@ else {
     Write-Host "==> linked $Link -> $ProjectDir"
 }
 
-# 6. Register the bundle in the profile manifest (idempotent)
+# 6. Link the workspace tool, record BOTH link dependencies, and register only
+#    the bridge as a bundle. This mirrors the Unix install postconditions.
+$LarkToolLink = Join-Path $ProfileDir (Join-Path 'node_modules' 'dsh-tool-lark-cli')
+if (Test-Path $LarkToolLink) {
+    $existingTool = Get-Item $LarkToolLink -Force
+    if ($existingTool.LinkType -ne 'Junction' -and $existingTool.LinkType -ne 'SymbolicLink') {
+        Write-Error "$LarkToolLink exists and is not a link - remove it first."
+        exit 1
+    }
+}
+else {
+    if ($IsWindowsOs) {
+        New-Item -ItemType Junction -Path $LarkToolLink -Target $LarkToolDir | Out-Null
+    }
+    else {
+        New-Item -ItemType SymbolicLink -Path $LarkToolLink -Target $LarkToolDir | Out-Null
+    }
+}
+if (-not (Test-Path $LarkToolLink)) {
+    Write-Error "link creation failed for $LarkToolLink"
+    exit 1
+}
+
 $pkg = Get-Content $Manifest -Raw | ConvertFrom-Json
+if ($null -eq $pkg.dependencies) {
+    $pkg | Add-Member -NotePropertyName 'dependencies' -NotePropertyValue ([pscustomobject]@{})
+}
+$pkg.dependencies | Add-Member -NotePropertyName 'dsh-lark-bridge' -NotePropertyValue "link:$ProjectDir" -Force
+$pkg.dependencies | Add-Member -NotePropertyName 'dsh-tool-lark-cli' -NotePropertyValue "link:$LarkToolDir" -Force
 if ($null -eq $pkg.dsh) {
     $pkg | Add-Member -NotePropertyName 'dsh' -NotePropertyValue ([pscustomobject]@{})
 }
 if ($null -eq $pkg.dsh.profile) {
     $pkg.dsh | Add-Member -NotePropertyName 'profile' -NotePropertyValue ([pscustomobject]@{})
 }
-if ($null -eq $pkg.dsh.profile.bundles) {
-    $pkg.dsh.profile | Add-Member -NotePropertyName 'bundles' -NotePropertyValue @()
-}
 $bundles = @($pkg.dsh.profile.bundles)
-if ($bundles -contains 'dsh-lark-bridge') {
-    Write-Host "==> bundle already registered in $Manifest"
+if ($bundles -notcontains 'dsh-lark-bridge') {
+    $pkg.dsh.profile | Add-Member -NotePropertyName 'bundles' -NotePropertyValue @($bundles + 'dsh-lark-bridge') -Force
 }
-else {
-    $pkg.dsh.profile.bundles = @($bundles + 'dsh-lark-bridge')
-    # Depth 10 keeps the nested dsh.profile.bundles intact; UTF-8 without BOM
-    # so Node's JSON.parse never trips on a BOM.
-    $json = $pkg | ConvertTo-Json -Depth 10
-    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText($Manifest, $json + [Environment]::NewLine, $utf8NoBom)
-    Write-Host "==> registered dsh-lark-bridge bundle in $Manifest"
+$json = $pkg | ConvertTo-Json -Depth 10
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($Manifest, $json + [Environment]::NewLine, $utf8NoBom)
+
+# 6b. Hard postcondition: both linked entries and the bundle registry must exist.
+foreach ($entry in @(
+    (Join-Path $Link 'lib\index.js'),
+    (Join-Path $LarkToolLink 'lib\index.js')
+)) {
+    if (-not (Test-Path $entry)) {
+        Write-Error "installation incomplete: $entry is missing"
+        exit 1
+    }
 }
+$check = Get-Content $Manifest -Raw | ConvertFrom-Json
+if (@($check.dsh.profile.bundles) -notcontains 'dsh-lark-bridge') {
+    Write-Error 'installation incomplete: dsh-lark-bridge is not registered as a bundle'
+    exit 1
+}
+Write-Host '==> verified bridge bundle + dsh-tool-lark-cli dependency'
 
 Write-Host ''
 Write-Host '==> Done. Next steps:'

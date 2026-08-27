@@ -23,14 +23,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "lib",
-    "rootDir": "src",
-
-    "baseUrl": ".",
-    "paths": {
-      "@deepseek-ai/cordis": ["../../../deepseek-harness/vendor/cordis/lib/types/index.d.ts"],
-      "@deepseek-ai/schemastery": ["../../../deepseek-harness/vendor/schemastery/lib/types/index.d.ts"],
-      "@deepseek-ai/dsh-tools": ["../../../deepseek-harness/packages/core/tools/lib/types/index.d.ts"]
-    }
+    "rootDir": "src"
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "lib"]

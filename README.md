@@ -13,9 +13,9 @@ Send a message in a Feishu chat, and a real dsh agent — with its own tools, it
 - **Feishu ⇄ dsh agent.** Inbound Feishu messages drive a live dsh agent through the host's `agents` service; the reply streams back onto a live-updating Feishu message.
 - **One group, one project folder.** Every chat id maps to a stable directory (`<workspaceRoot>/<chatId>`), created on first use. Different groups never touch each other's files.
 - **Persistent per-chat sessions.** A chat's conversation survives restarts (policy-fingerprint-gated resume-or-create; `/new` really clears it).
-- **Files.** Just send them to the bot — the bridge downloads them into the chat's `.attachments/` folder and hands the paths to the agent. Limits: 5 attachments per message, ≤20 MB each (over-limit attachments are rejected loudly); file names are sanitized; files older than 7 days are swept. (Images are not supported yet.)
+- **Files and images.** Send them to the bot and the bridge stores each message in an isolated `.attachments/<messageId>/` folder, then gives the paths to the agent. Limits: 5 attachments per message, images ≤10 MB, other files ≤20 MB; names are sanitized and stale files are swept after 7 days. Whether an image can actually be interpreted depends on the selected model's vision support.
 - **Zero-config setup.** On first launch, if no credentials exist, the plugin auto-runs a QR registration wizard — scan it in the Feishu app and it connects automatically. No portal spelunking.
-- **Slash commands.** `/help`, `/new`, `/where`, `/model`, `/whoami` manage each chat locally; the owner can authorize/revoke a group in-chat with `/allow` and `/disallow`.
+- **Slash commands.** `/help`, `/new`, `/where`, `/models`, and `/whoami` manage each chat locally; owner-only `/model`, `/preset`, `/allow`, and `/disallow` change shared chat state.
 
 ## Architecture in one picture
 
@@ -177,7 +177,9 @@ export LARK_TENANT=feishu      # or `lark` for larksuite.com
 | `/help` | Show help |
 | `/new` | Start a fresh session (clears this chat's context) |
 | `/where` | Show this chat's project directory |
-| `/model [name]` | Show or switch the model for this chat |
+| `/models` | List available providers/models |
+| `/model [provider/model]` | (owner only) Show or switch the model for this chat |
+| `/preset [workspace\|read-only\|full]` | (owner only) Show or switch this chat's access tier |
 | `/whoami` | Show your identity and this chat's authorization state |
 | `/allow` | (owner only, group chats) Authorize this chat to use the bot |
 | `/disallow` | (owner only, group chats) Revoke this chat's authorization |
@@ -198,8 +200,15 @@ Every field can come from the plugin `config:` block **or** an environment varia
 | `workspaceRoot` | `DSH_LARK_WORKSPACE_ROOT` | `~/dsh-lark-workspaces` | Root for per-chat folders |
 | `allowDm` | `DSH_LARK_ALLOW_DM` | `true` | Respond in direct messages |
 | `requireMention` | `DSH_LARK_REQUIRE_MENTION` | `true` | In groups, require an `@`-mention |
+| `turnTimeoutMs` | `DSH_LARK_TURN_TIMEOUT_MS` | `600000` | Hard deadline for one agent turn; timeout disposes the stuck session |
 | `allowedChats` | `DSH_LARK_ALLOWED_CHATS` | `[]` | Chat ids allowed to use the bot (comma-separated). **Empty = no group allowed (fail-closed)** |
 | `allowedUsers` | `DSH_LARK_ALLOWED_USERS` | `[]` | User open_ids allowed to DM the bot (comma-separated). **Empty = only the owner may DM** |
+| `accessMode` | `DSH_LARK_ACCESS_MODE` | `workspace` | Default access tier: `read-only`, `workspace`, or `full` |
+| `extraPresets` | `DSH_LARK_EXTRA_PRESETS` | `{}` | Extra `id:preset-name` pairs |
+| `ssoGatedPresets` | `DSH_LARK_SSO_GATED_PRESETS` | `[]` | Preset ids that must pass host SSO on switch and on every turn |
+| `ssoCheckCmd` | `DSH_LARK_SSO_CHECK_CMD` | — | SSO status command, parsed as argv without a shell |
+| `ssoOkMarker` | `DSH_LARK_SSO_OK_MARKER` | `Authenticated` | Required text in successful SSO output |
+| `presetModels` | `DSH_LARK_PRESET_MODELS` | `{}` | `presetId:provider:model` routes |
 
 Credentials are read in this order: inline config → environment variables → the file written by the registration wizard.
 

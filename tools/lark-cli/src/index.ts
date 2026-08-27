@@ -22,7 +22,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import z from '@deepseek-ai/schemastery'
-import { spawn } from 'node:child_process'
+import spawn from 'cross-spawn'
 import { splitArgs } from './split-args.js'
 
 /** Cordis plugin name (the row id the preset mounts). */

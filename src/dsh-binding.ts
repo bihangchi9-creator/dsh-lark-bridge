@@ -20,8 +20,7 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import * as dshLlm from '@deepseek-ai/dsh-llm'
-import * as dshSession from '@deepseek-ai/dsh-session'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { bridgeHome } from './credentials.js'
 import { BRIDGE_SYSTEM_PROMPT } from './bridge-prompt.js'
@@ -34,14 +33,25 @@ import {
 } from './session-catalog.js'
 
 /**
- * Peer-package values are read through the namespace rather than named
- * imports so that a renamed/removed export in a future dsh release degrades
- * to a runtime error this plugin catches — NOT an ESM link-time crash that
- * would take the whole host down at load. See the install-robustness notes.
+ * Build the structural user-message shape consumed by `agent.followup`.
+ *
+ * DSH's `SessionId` is only a compile-time string brand, and its
+ * `createUserMessage` adds a UUID + `role: user` and freezes the value. Keeping
+ * those two tiny wire constructors local avoids ESM load-time dependencies on
+ * unpublished/internal DSH packages while preserving the exact runtime shape.
  */
-const createUserMessage = (dshLlm as { createUserMessage?: (input: unknown) => unknown })
-  .createUserMessage
-const SessionId = (dshSession as { SessionId?: (id: string) => unknown }).SessionId
+function createBridgeUserMessage(text: string): Readonly<Record<string, unknown>> {
+  const message = {
+    id: randomUUID(),
+    role: 'user' as const,
+    content: [{ type: 'text' as const, text }],
+    source: { kind: 'user' as const },
+  }
+  Object.freeze(message.content[0])
+  Object.freeze(message.content)
+  Object.freeze(message.source)
+  return Object.freeze(message)
+}
 
 /**
  * A resolved model route: which provider + model (and optional reasoning
@@ -138,6 +148,37 @@ interface AgentPresetsLike {
 }
 
 /**
+ * Mount the requested preset without privilege-escalating fallbacks.
+ *
+ * A named preset is a security boundary (for example, workspace/read-only).
+ * If the preset service or that named preset is unavailable, fail the turn.
+ * Only an explicitly undefined preset means "use the deployment default".
+ */
+export async function mountPresetFailClosed(
+  presets: AgentPresetsLike | undefined,
+  agentCtx: unknown,
+  preset: string | undefined,
+): Promise<void> {
+  if (!presets) {
+    if (preset !== undefined) {
+      throw new Error(
+        `dsh-lark-bridge: required preset ${JSON.stringify(preset)} cannot be mounted because the agentPresets service is unavailable`,
+      )
+    }
+    return
+  }
+  try {
+    await presets.mount(agentCtx, preset)
+  } catch (cause) {
+    if (preset === undefined) throw cause
+    throw new Error(
+      `dsh-lark-bridge: required preset ${JSON.stringify(preset)} is unavailable; refusing to fall back to the deployment default`,
+      { cause },
+    )
+  }
+}
+
+/**
  * The default-model service (`ctx.agentDefaultModel`). Mounting a preset gives
  * an agent its tools and prompt but NOT a model; every turn needs a resolved
  * `{ provider, model }`, and the deployment default lives here (e.g.
@@ -173,8 +214,11 @@ export class DshBinding {
     this.catalog = new SessionCatalog(join(bridgeHome(), 'session-catalog.json'))
     // One global subscription; routed to the right chat by the session id we
     // minted for it. dsh emits (session, event) for every live agent.
-    ctx.on('session/event', (session: { id: unknown }, event: unknown) => {
-      const key = String((session as { id: unknown }).id)
+    const eventCtx = ctx as unknown as {
+      on(event: string, handler: (session: { id: unknown }, event: unknown) => void): unknown
+    }
+    eventCtx.on('session/event', (session: { id: unknown }, event: unknown) => {
+      const key = String(session.id)
       const handler = this.handlers.get(key)
       if (!handler) return
       const translated = translate(event)
@@ -297,10 +341,9 @@ export class DshBinding {
     const entry = this.catalog.entryFor(chatId)
     const gen = nextGen(entry, fingerprint)
     // A stable, readable id per chat keeps sessions greppable in dsh logs.
-    if (typeof SessionId !== 'function') {
-      throw new Error('dsh-lark-bridge: @deepseek-ai/dsh-session does not export SessionId (incompatible dsh version)')
-    }
-    const sessionId = SessionId(sessionIdFor(chatId, gen))
+    // SessionId is a compile-time string brand in DSH, so the raw string is
+    // the complete runtime representation.
+    const sessionId = sessionIdFor(chatId, gen)
     // `preset` selects the agent's composed world (tools + prompt); the model
     // route (`provider`/`model`) is separate and must be bound explicitly —
     // mounting a preset does NOT give the agent a model.
@@ -347,24 +390,7 @@ export class DshBinding {
         this.log?.('warn', 'could not mount bridge protocol prompt section', err)
       }
 
-      if (presets) {
-        try {
-          await presets.mount(agentCtx, preset)
-        } catch (err) {
-          if (preset === undefined) throw err
-          // The named tier preset (lark-workspace / lark-readonly) is not
-          // installed in this deployment. Rather than fail every turn, fall
-          // back to the deployment default and say so loudly — otherwise a
-          // deployment without the presets silently loses its blast-radius
-          // reduction.
-          this.log?.(
-            'warn',
-            `preset ${JSON.stringify(preset)} unavailable — falling back to the deployment default`,
-            err,
-          )
-          await presets.mount(agentCtx, undefined)
-        }
-      }
+      await mountPresetFailClosed(presets, agentCtx, preset)
     }
 
     // Resume-or-create: a fixed per-chat session id collides with `create` once
@@ -422,17 +448,15 @@ export class DshBinding {
     const session: BridgeSession = {
       sessionId: key,
       send: (text: string) => {
-        if (typeof createUserMessage !== 'function') {
-          throw new Error('dsh-lark-bridge: @deepseek-ai/dsh-llm does not export createUserMessage (incompatible dsh version)')
-        }
         // Prefer the live registry lookup so a hot-reloaded agent still works.
         const live = agents.get(handle.agent.id) ?? handle.agent
-        live.followup(
-          createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }),
-        )
+        live.followup(createBridgeUserMessage(text))
       },
       dispose: async () => {
+        // Events may have been registered under both the live agent id and the
+        // requested session id; remove both to avoid stale handlers.
         this.handlers.delete(key)
+        this.handlers.delete(sessionKey)
         this.sessions.delete(chatId)
         await handle.dispose()
       },
@@ -452,10 +476,11 @@ export class DshBinding {
    * AND write a sentinel catalog entry so the next `ensureSession` rotates to
    * a fresh generation instead of resuming the persisted log.
    */
-  reset(chatId: string): void {
+  async reset(chatId: string): Promise<void> {
     const entry = this.catalog.entryFor(chatId)
     this.catalog.set(chatId, resetEntry(entry))
-    void this.dispose(chatId)
+    // Await disposal so an immediate follow-up cannot reuse a dying session.
+    await this.dispose(chatId)
   }
 
   /** Dispose every live session (plugin teardown). */

@@ -53,7 +53,7 @@ export function decideAccess(
   if (controls.ownerId !== undefined && msg.senderId === controls.ownerId) {
     return { ok: true, reason: 'owner' }
   }
-  if (controls.allowedChats.includes(msg.chatId)) {
+  if (msg.chatType === 'group' && controls.allowedChats.includes(msg.chatId)) {
     return { ok: true, reason: 'allowed-chat' }
   }
   if (msg.chatType === 'p2p' && controls.allowedUsers.includes(msg.senderId)) {

@@ -164,7 +164,9 @@ export LARK_TENANT=feishu      # 国际版 larksuite.com 用 `lark`
 | `/help` | 显示帮助 |
 | `/new` | 开一个全新会话（清空本群上下文） |
 | `/where` | 显示本群的项目目录 |
-| `/model [名称]` | 查看或切换本群使用的模型 |
+| `/models` | 列出可用 provider/model |
+| `/model [provider/model]` | （仅 owner）查看或切换本群模型 |
+| `/preset [workspace\|read-only\|full]` | （仅 owner）查看或切换本群权限档位 |
 | `/whoami` | 显示你的用户身份和本群的授权状态 |
 | `/allow` | （仅 owner，群聊）在本群授权，允许成员使用机器人 |
 | `/disallow` | （仅 owner，群聊）撤销本群授权 |
@@ -185,8 +187,15 @@ export LARK_TENANT=feishu      # 国际版 larksuite.com 用 `lark`
 | `workspaceRoot` | `DSH_LARK_WORKSPACE_ROOT` | `~/dsh-lark-workspaces` | 按群文件夹的根目录 |
 | `allowDm` | `DSH_LARK_ALLOW_DM` | `true` | 是否响应私聊 |
 | `requireMention` | `DSH_LARK_REQUIRE_MENTION` | `true` | 群里是否必须 `@` 才触发 |
+| `turnTimeoutMs` | `DSH_LARK_TURN_TIMEOUT_MS` | `600000` | 单次 agent 回合硬超时；超时会销毁卡住的会话 |
 | `allowedChats` | `DSH_LARK_ALLOWED_CHATS` | `[]` | 允许使用机器人的群 chatId（逗号分隔）。**空 = 任何群都不允许（fail-closed）** |
 | `allowedUsers` | `DSH_LARK_ALLOWED_USERS` | `[]` | 允许私聊使用机器人的用户 open_id（逗号分隔）。**空 = 私聊只允许 owner** |
+| `accessMode` | `DSH_LARK_ACCESS_MODE` | `workspace` | 默认档位：`read-only`、`workspace` 或 `full` |
+| `extraPresets` | `DSH_LARK_EXTRA_PRESETS` | `{}` | 额外 `id:preset-name` 配置 |
+| `ssoGatedPresets` | `DSH_LARK_SSO_GATED_PRESETS` | `[]` | 切换及每次使用前都必须通过宿主 SSO 的档位 |
+| `ssoCheckCmd` | `DSH_LARK_SSO_CHECK_CMD` | — | SSO 状态命令（argv 执行，不经过 shell） |
+| `ssoOkMarker` | `DSH_LARK_SSO_OK_MARKER` | `Authenticated` | SSO 成功输出必须包含的文本 |
+| `presetModels` | `DSH_LARK_PRESET_MODELS` | `{}` | `presetId:provider:model` 模型路由 |
 
 凭证读取顺序：内联 config → 环境变量 → 注册向导写的文件。
 

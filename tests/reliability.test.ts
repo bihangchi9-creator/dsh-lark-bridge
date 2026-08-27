@@ -1,5 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { splitLongText } from '../src/lark'
+import { resolveModelRoute, splitLongText } from '../src/lark'
+
+describe('resolveModelRoute', () => {
+  const catalog = [
+    { provider: 'p1', models: [{ id: 'unique' }, { id: 'shared' }] },
+    { provider: 'p2', models: [{ id: 'shared' }, { id: 'other' }] },
+  ]
+
+  it('accepts an exact provider/model route', () => {
+    expect(resolveModelRoute('p2/other', catalog)).toEqual({ provider: 'p2', model: 'other' })
+  })
+
+  it('resolves a bare model only when unique', () => {
+    expect(resolveModelRoute('unique', catalog)).toEqual({ provider: 'p1', model: 'unique' })
+    expect(resolveModelRoute('shared', catalog)).toBeUndefined()
+  })
+
+  it('rejects unknown provider/model combinations', () => {
+    expect(resolveModelRoute('p3/other', catalog)).toBeUndefined()
+    expect(resolveModelRoute('missing', catalog)).toBeUndefined()
+  })
+})
 
 describe('splitLongText', () => {
   it('returns the text unchanged when it fits', () => {

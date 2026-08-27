@@ -1,8 +1,8 @@
 /**
  * Tokenize a command line into argv tokens. No shell is involved — this only
  * parses configuration/model-generated input into an argument array, honoring
- * single/double quotes and backslash escapes. Dependency-free for isolated
- * unit testing.
+ * single/double quotes. A backslash escapes only whitespace, quotes, or another
+ * backslash; otherwise it is preserved so Windows paths survive intact.
  *
  * @module dsh-lark-bridge/split-args
  */
@@ -11,15 +11,16 @@ export function splitArgs(input: string): string[] {
   const tokens: string[] = []
   let current = ''
   let quote: '"' | "'" | undefined
-  let escaped = false
-  for (const ch of input) {
-    if (escaped) {
-      current += ch
-      escaped = false
-      continue
-    }
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]!
     if (ch === '\\' && quote !== "'") {
-      escaped = true
+      const next = input[i + 1]
+      if (next !== undefined && (/\s/.test(next) || next === '"' || next === "'" || next === '\\')) {
+        current += next
+        i++
+      } else {
+        current += '\\'
+      }
       continue
     }
     if (quote !== undefined) {
@@ -40,7 +41,6 @@ export function splitArgs(input: string): string[] {
     }
     current += ch
   }
-  if (escaped) current += '\\'
   if (current.length > 0) tokens.push(current)
   return tokens
 }
