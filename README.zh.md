@@ -1,6 +1,6 @@
 # dsh-lark-bridge
 
-> 一个原生的 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-V3)（dsh）插件，把 dsh 编码智能体接入**飞书 / Lark 群聊**——*一个群，一个项目文件夹*。
+> 把本地编码智能体接到**飞书 / Lark 群聊**——*一个群，一段对话，一条钉死的运行时*。当前仓库交付的是 **dsh 插件**；CLI spawn 与 IDE attach 共用同一套契约，后续切片再上。
 
 [English README](./README.md)
 
@@ -15,7 +15,7 @@
 - **按群持久会话。** 一个群的对话在重启后依然保留（按策略指纹门控的「恢复或新建」，`/new` 真正清空）。
 - **收文件。** 文件直接发给机器人即可——bridge 下载到本群工作区的 `.attachments/` 目录并把路径交给智能体。限制：每条消息最多 5 个附件，单文件 ≤20MB，超出会被明确拒绝；文件名自动消毒，7 天后自动清理。（图片暂不支持）
 - **零配置启动。** 首次启动若没有凭证，插件会自动跑二维码注册向导——用飞书 App 一扫就自动连上，不用去开放平台后台一步步翻。
-- **斜杠命令。** `/help`、`/new`、`/where`、`/model`、`/whoami` 在本群本地管理；owner 可用 `/allow`、`/disallow` 在群内直接授权/撤销。
+- **斜杠命令。** `/help`、`/new`、`/where`、`/models`、`/agent`、`/whoami` 在本群本地管理；owner 可用 `/agent`、`/model`、`/preset`、`/allow`、`/disallow`。`/agent` 把本群钉到一条已安装运行时上，断线不会改绑。
 
 ## 一张图看懂架构
 
@@ -30,6 +30,20 @@
 ```
 
 机器人**注册完全在飞书这一侧**，跟 dsh 无关。dsh 只负责「加载本插件」；插件再用 WebSocket **长连接**主动连到飞书（所以不需要公网 IP、也不需要回调地址）。
+
+CLI / IDE / 自研智能体走**独立 daemon**，不是这个插件：
+
+```bash
+pnpm build
+node lib/daemon.js
+LARK_BRIDGE_RUNTIME=traex node lib/daemon.js
+LARK_BRIDGE_IDE_SOCKET=/tmp/ide.sock node lib/daemon.js
+LARK_BRIDGE_CUSTOM_ADAPTER=./examples/custom-adapter.mjs node lib/daemon.js
+```
+
+CLI **spawn** 二进制；IDE **attach** Unix socket 上的 JSONL sidecar（窗口关了这条线断）；自研加载 `AgentAdapter` 模块。一个群仍然是一段对话，`/agent` 钉死，断线不改绑。
+
+字节内部 overlay（SSO / bytecli / 扩展档位）在本地 `internal/`，已被 gitignore。不要推到这个 GitHub 仓库，走内部 skill 市场发布。
 
 ---
 
@@ -167,7 +181,8 @@ export LARK_TENANT=feishu      # 国际版 larksuite.com 用 `lark`
 | `/models` | 列出可用 provider/model |
 | `/model [provider/model]` | （仅 owner）查看或切换本群模型 |
 | `/preset [workspace\|read-only\|full]` | （仅 owner）查看或切换本群权限档位 |
-| `/whoami` | 显示你的用户身份和本群的授权状态 |
+| `/agent [id]` | 查看本群运行时；owner 可钉死（目前只有 `dsh`）。断线不会改绑 |
+| `/whoami` | 显示身份、本群运行时和授权状态 |
 | `/allow` | （仅 owner，群聊）在本群授权，允许成员使用机器人 |
 | `/disallow` | （仅 owner，群聊）撤销本群授权 |
 

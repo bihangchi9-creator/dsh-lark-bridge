@@ -21,8 +21,10 @@ import type { Context } from '@deepseek-ai/cordis'
 import { Config, resolveConfig, tryResolveConfig, type LarkBridgeConfig } from './config.js'
 import { PRESET_BY_ACCESS_MODE } from './access-mode.js'
 import { registerUrlPath, writeRegisterUrl } from './credentials.js'
+import { DshAdapter } from './dsh-adapter.js'
 import { DshBinding } from './dsh-binding.js'
 import { LarkBridge } from './lark.js'
+import { DSH_RUNTIME } from './runtime.js'
 import { runRegister } from './register.js'
 import { sanitizeLogValue, type LogFn } from './safe-log.js'
 
@@ -41,6 +43,11 @@ export const inject = ['agents']
 
 export { Config }
 export type { LarkBridgeConfig }
+export { startDaemon, loadDaemonAdapters } from './daemon.js'
+export { DshAdapter } from './dsh-adapter.js'
+export { CliSpawnAdapter, TRAEX_RUNTIME, CODEX_RUNTIME } from './cli-adapter.js'
+export { IdeAttachAdapter, IDE_RUNTIME } from './ide-adapter.js'
+export { loadCustomAdapter } from './custom-adapter.js'
 
 /**
  * Plugin entry. If credentials are present it wires the Feishu channel and
@@ -84,7 +91,7 @@ function applyInner(ctx: Context, config: LarkBridgeConfig, log: LogFn): void {
         },
         log,
       )
-      bridge = new LarkBridge(resolved, binding, log)
+      bridge = new LarkBridge(resolved, [new DshAdapter(binding)], log, DSH_RUNTIME.id)
       void bridge.connect().catch(err => log('error', 'failed to connect', err))
     }
 

@@ -16,6 +16,7 @@ export type Command =
   | { kind: 'model'; value?: string }
   | { kind: 'models' }
   | { kind: 'preset'; value?: string }
+  | { kind: 'agent'; value?: string }
   | { kind: 'allow' }
   | { kind: 'disallow' }
   | { kind: 'whoami' }
@@ -46,6 +47,9 @@ export function parseCommand(text: string): Command | undefined {
       return { kind: 'models' }
     case 'preset':
       return { kind: 'preset', value: arg.length > 0 ? arg : undefined }
+    case 'agent':
+    case 'runtime':
+      return { kind: 'agent', value: arg.length > 0 ? arg : undefined }
     case 'allow':
       return { kind: 'allow' }
     case 'disallow':
@@ -59,18 +63,20 @@ export function parseCommand(text: string): Command | undefined {
 
 /** The help text shown for `/help`. */
 export const HELP_TEXT = [
-  '**dsh-lark-bridge** — DeepSeek Harness in Feishu',
+  '**dsh-lark-bridge** — Feishu bridge for a local coding agent',
   '',
-  'Send any message to talk to the coding agent. This chat has its own project folder and its own conversation memory.',
+  'Send any message to talk to the coding agent. This chat has its own project folder, its own conversation, and one pinned runtime. Other groups do not share this session.',
   '',
   '**Commands**',
   '- `/help` — show this help',
   '- `/new` — start a fresh session (clears this chat\'s context)',
   '- `/where` — show this chat\'s project directory',
   '- `/models` — list the available model catalog',
-  '- `/whoami` — show this chat\'s id and authorization state',
+  '- `/agent` — show this chat\'s runtime',
+  '- `/whoami` — show this chat\'s id, runtime, and authorization state',
   '',
   '**Owner-only**',
+  '- `/agent [id]` — pin this chat to an installed runtime (no silent fallback)',
   '- `/model [provider/model]` — show or switch this chat\'s model',
   '- `/preset [workspace|read-only|full]` — show or switch the access tier',
   '- `/allow` — authorize the current group chat',

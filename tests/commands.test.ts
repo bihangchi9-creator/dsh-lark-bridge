@@ -53,6 +53,12 @@ describe('parseCommand', () => {
     expect(parseCommand('/preset   workspace  ')).toEqual({ kind: 'preset', value: 'workspace' })
   })
 
+  it('parses /agent and /runtime', () => {
+    expect(parseCommand('/agent')).toEqual({ kind: 'agent', value: undefined })
+    expect(parseCommand('/agent dsh')).toEqual({ kind: 'agent', value: 'dsh' })
+    expect(parseCommand('/runtime traex')).toEqual({ kind: 'agent', value: 'traex' })
+  })
+
   it('flags unknown commands with their name', () => {
     expect(parseCommand('/frobnicate x')).toEqual({ kind: 'unknown', name: 'frobnicate' })
   })

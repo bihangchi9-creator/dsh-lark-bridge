@@ -1,12 +1,13 @@
 {
   "name": "dsh-lark-bridge",
   "version": "0.0.1",
-  "description": "A DeepSeek Harness (dsh) plugin that bridges dsh agents to Feishu/Lark group chats — one group, one project directory.",
+  "description": "Feishu/Lark bridge for local coding agents — one group, one conversation, one pinned runtime. dsh plugin + CLI spawn daemon.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "bin": {
-    "dsh-lark-register": "lib/register-cli.js"
+    "dsh-lark-register": "lib/register-cli.js",
+    "dsh-lark-bridge": "lib/daemon.js"
   },
   "exports": {
     ".": {

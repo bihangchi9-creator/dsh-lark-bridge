@@ -1,6 +1,6 @@
 # dsh-lark-bridge
 
-> A native [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-V3) (dsh) plugin that bridges dsh coding agents to **Feishu / Lark group chats** — *one group, one project folder*.
+> A Feishu / Lark bridge for local coding agents — *one group, one conversation, one pinned runtime*. Today this repo ships the **dsh plugin**; CLI spawn and IDE attach share the same contract and come next.
 
 [中文 README](./README.zh.md)
 
@@ -15,7 +15,7 @@ Send a message in a Feishu chat, and a real dsh agent — with its own tools, it
 - **Persistent per-chat sessions.** A chat's conversation survives restarts (policy-fingerprint-gated resume-or-create; `/new` really clears it).
 - **Files and images.** Send them to the bot and the bridge stores each message in an isolated `.attachments/<messageId>/` folder, then gives the paths to the agent. Limits: 5 attachments per message, images ≤10 MB, other files ≤20 MB; names are sanitized and stale files are swept after 7 days. Whether an image can actually be interpreted depends on the selected model's vision support.
 - **Zero-config setup.** On first launch, if no credentials exist, the plugin auto-runs a QR registration wizard — scan it in the Feishu app and it connects automatically. No portal spelunking.
-- **Slash commands.** `/help`, `/new`, `/where`, `/models`, and `/whoami` manage each chat locally; owner-only `/model`, `/preset`, `/allow`, and `/disallow` change shared chat state.
+- **Slash commands.** `/help`, `/new`, `/where`, `/models`, `/agent`, and `/whoami` manage each chat locally; owner-only `/agent`, `/model`, `/preset`, `/allow`, and `/disallow` change shared chat state. `/agent` pins this chat to one installed runtime and never silently retargets.
 
 ## Architecture in one picture
 
@@ -30,6 +30,20 @@ Send a message in a Feishu chat, and a real dsh agent — with its own tools, it
 ```
 
 The bot **registration lives entirely on Feishu**, not in dsh. dsh only *loads this plugin*; the plugin then connects out to Feishu over a long-lived WebSocket (so no public IP or callback URL is needed).
+
+CLI / IDE / custom agents use a **separate daemon**, not this plugin:
+
+```bash
+pnpm build
+node lib/daemon.js                            # spawn traex/codex on PATH
+LARK_BRIDGE_RUNTIME=traex node lib/daemon.js
+LARK_BRIDGE_IDE_SOCKET=/tmp/ide.sock node lib/daemon.js
+LARK_BRIDGE_CUSTOM_ADAPTER=./examples/custom-adapter.mjs node lib/daemon.js
+```
+
+CLI **spawns** the binary. IDE **attaches** a Unix-socket JSONL sidecar (window closed ⇒ that line dies). Custom loads an `AgentAdapter` module. One group is still one conversation pinned with `/agent`; a dead line is not retargeted.
+
+ByteDance-only overlay (SSO, bytecli, extra presets) lives in a local `internal/` directory that is gitignored. Do not publish it to this GitHub repo; ship it through the internal skill marketplace.
 
 ---
 
@@ -185,7 +199,8 @@ export LARK_TENANT=feishu      # or `lark` for larksuite.com
 | `/models` | List available providers/models |
 | `/model [provider/model]` | (owner only) Show or switch the model for this chat |
 | `/preset [workspace\|read-only\|full]` | (owner only) Show or switch this chat's access tier |
-| `/whoami` | Show your identity and this chat's authorization state |
+| `/agent [id]` | Show this chat's runtime; owner pins it (`dsh` today). A dead line is not retargeted |
+| `/whoami` | Show identity, this chat's runtime, and authorization |
 | `/allow` | (owner only, group chats) Authorize this chat to use the bot |
 | `/disallow` | (owner only, group chats) Revoke this chat's authorization |
 

@@ -4,8 +4,8 @@
  * message.
  *
  * This is the plugin's "external protocol driver" in dsh terms: Feishu is the
- * wire peer, {@link DshBinding} is the agent factory, and each group chat maps
- * to one long-lived session with its own project directory.
+ * wire peer, {@link AgentAdapter} is the pinned runtime, and each group chat
+ * maps to one long-lived session with its own project directory.
  *
  * @module dsh-lark-bridge/lark
  */
@@ -22,8 +22,16 @@ import { ChatPresetStore, chatPresetPath, isPresetId, presetNameFor } from './ch
 import { parseCommand, HELP_TEXT } from './commands.js'
 import { domainFor, type ResolvedConfig } from './config.js'
 import { saveOwnerId } from './credentials.js'
-import { DshBinding, type BridgeEvent } from './dsh-binding.js'
+import type { AgentAdapter } from './adapter.js'
+import type { BridgeEvent } from './dsh-binding.js'
 import { createSafeSdkLogger } from './safe-log.js'
+import {
+  ChatRuntimeStore,
+  chatRuntimePath,
+  isRuntimeId,
+  resolveChatRuntime,
+  type RuntimeDescriptor,
+} from './runtime.js'
 import { splitArgs } from './split-args.js'
 import { resolveWorkspace } from './workspace.js'
 
@@ -97,10 +105,20 @@ export class LarkBridge {
   /** Per-chat preset overrides (owner `/preset`, persisted). */
   private readonly chatPresets: ChatPresetStore
 
+  /** Adapters this process can pin a chat to. Lookup is by id; no fallback. */
+  private readonly adapters: ReadonlyMap<string, AgentAdapter>
+  /** Runtimes this process can pin a chat to. */
+  private readonly installedRuntimes: readonly RuntimeDescriptor[]
+  /** Default runtime when a chat has no `/agent` pin. */
+  private readonly defaultRuntimeId: string
+  /** Per-chat runtime pins (owner `/agent`, persisted). */
+  private readonly chatRuntimes: ChatRuntimeStore
+
   constructor(
     private readonly config: ResolvedConfig,
-    private readonly binding: DshBinding,
+    adapters: readonly AgentAdapter[],
     private readonly log: (level: 'info' | 'warn' | 'error', msg: string, extra?: unknown) => void,
+    defaultRuntimeId?: string,
   ) {
     const opts: LarkChannelOptions = {
       appId: config.appId,
@@ -117,10 +135,40 @@ export class LarkBridge {
       logger: createSafeSdkLogger(log),
       respectProxyEnv: true,
     }
+    if (adapters.length === 0) {
+      throw new Error('dsh-lark-bridge: at least one runtime adapter is required')
+    }
     this.channel = createLarkChannel(opts)
     this.ownerId = config.ownerId
     this.allowlist = new AllowlistStore(allowlistPath())
     this.chatPresets = new ChatPresetStore(chatPresetPath())
+    this.adapters = new Map(adapters.map(adapter => [adapter.id, adapter]))
+    this.installedRuntimes = adapters.map(adapter => ({
+      id: adapter.id,
+      kind: adapter.kind,
+      displayName: adapter.displayName,
+      attach: adapter.attach,
+    }))
+    this.defaultRuntimeId = defaultRuntimeId ?? adapters[0]!.id
+    if (!this.adapters.has(this.defaultRuntimeId)) {
+      throw new Error(`dsh-lark-bridge: default runtime ${JSON.stringify(this.defaultRuntimeId)} is not installed`)
+    }
+    this.chatRuntimes = new ChatRuntimeStore(chatRuntimePath())
+  }
+
+  private installedIds(): Set<string> {
+    return new Set(this.installedRuntimes.map(runtime => runtime.id))
+  }
+
+  /** This chat's pin, or the process default. Missing pins fail closed at turn time. */
+  private chatRuntime(chatId: string): ReturnType<typeof resolveChatRuntime> {
+    return resolveChatRuntime(chatId, this.chatRuntimes, this.installedRuntimes, this.defaultRuntimeId)
+  }
+
+  /** Adapter for this chat. Undefined means the pin is gone — do not retarget. */
+  private adapterFor(chatId: string): AgentAdapter | undefined {
+    const pinned = this.chatRuntime(chatId)
+    return pinned.runtime === undefined ? undefined : this.adapters.get(pinned.id)
   }
 
   /** The effective access controls: config/env allowlists + command-managed store. */
@@ -215,7 +263,7 @@ export class LarkBridge {
   async disconnect(): Promise<void> {
     if (this.ownerRefreshTimer) clearInterval(this.ownerRefreshTimer)
     this.ownerRefreshTimer = undefined
-    await this.binding.disposeAll()
+    await Promise.allSettled([...this.adapters.values()].map(adapter => adapter.disposeAll()))
     await this.channel.disconnect()
   }
 
@@ -299,7 +347,12 @@ export class LarkBridge {
         // P3: reset must defeat persistence — a sentinel fingerprint makes
         // the next session rotate to a fresh generation, so the old context
         // cannot come back after a restart.
-        await this.binding.reset(msg.chatId)
+        const adapter = this.adapterFor(msg.chatId)
+        if (!adapter) {
+          await this.reply(msg, '🧷 本群钉的运行时未安装，`/new` 不会改绑。用 `/agent` 查看。')
+          return
+        }
+        await adapter.reset(msg.chatId)
         await this.reply(msg, '🧹 Started a fresh session for this chat.')
         return
       }
@@ -352,9 +405,14 @@ export class LarkBridge {
         const chatStatus = inEnv || inStore
           ? `✅ 已授权（${inEnv ? '环境变量' : '命令授权'}）`
           : '🔒 未授权'
+        const runtime = this.chatRuntime(msg.chatId)
+        const runtimeLine = runtime.runtime
+          ? `${runtime.runtime.displayName} (\`${runtime.id}\`, ${runtime.runtime.kind}/${runtime.runtime.attach}${runtime.pinned ? ', pinned' : ''})`
+          : `\`${runtime.id}\`（已钉死但未安装 — 不会改绑）`
         const lines = [
           `📋 **chatId**: \`${msg.chatId}\``,
           `聊天类型: ${msg.chatType === 'p2p' ? '私聊' : '群聊'}`,
+          `本聊天运行时: ${runtimeLine}`,
           `本聊天授权状态: ${chatStatus}`,
         ]
         if (msg.chatType === 'p2p') {
@@ -383,7 +441,7 @@ export class LarkBridge {
           await this.reply(msg, `🤖 Current model: \`${current}\`\nUse \`/model <provider>/<model>\` to switch, \`/models\` to list.`)
           return
         }
-        const catalog = await this.binding.listModels()
+        const catalog = await this.adapterFor(msg.chatId)?.listModels?.() ?? []
         const route = resolveModelRoute(command.value, catalog)
         if (!route) {
           await this.reply(msg, `❓ 未找到唯一模型 \`${command.value}\`。请用 \`/models\` 查看，并使用 \`/model <provider>/<model>\`。`)
@@ -391,13 +449,13 @@ export class LarkBridge {
         }
         this.chatModels.set(msg.chatId, route)
         // A model change only takes effect on a fresh session.
-        await this.binding.dispose(msg.chatId)
+        await this.adapterFor(msg.chatId)?.dispose(msg.chatId)
         await this.reply(msg, `🤖 Model set to \`${route.provider}/${route.model}\` and session reset.`)
         return
       }
       case 'models': {
         // List the deployment's model catalog from the llm service.
-        const catalog = await this.binding.listModels()
+        const catalog = await this.adapterFor(msg.chatId)?.listModels?.() ?? []
         if (catalog.length === 0) {
           await this.reply(msg, '🤖 模型目录不可用（llm 服务未提供）。')
           return
@@ -468,8 +526,44 @@ export class LarkBridge {
         else this.chatPresets.set(msg.chatId, value)
         // Preset is part of the session fingerprint — disposing rotates to a
         // fresh generation, so no old context carries into the new tier.
-        await this.binding.dispose(msg.chatId)
+        await this.adapterFor(msg.chatId)?.dispose(msg.chatId)
         await this.reply(msg, `🎚️ 本群已切换到 \`${value}\` 档（新会话生效）。`)
+        return
+      }
+      case 'agent': {
+        const current = this.chatRuntime(msg.chatId)
+        const installed = this.installedRuntimes
+          .map(runtime => `\`${runtime.id}\` (${runtime.kind}/${runtime.attach})`)
+          .join(' ')
+        if (command.value === undefined || command.value === '') {
+          const label = current.runtime
+            ? `${current.runtime.displayName} (\`${current.id}\`)`
+            : `\`${current.id}\`（已钉死但未安装）`
+          await this.reply(
+            msg,
+            `🧷 本群运行时: ${label}\n已安装: ${installed || '（无）'}\nOwner 用 \`/agent <id>\` 钉死本群；断线不会改绑到其它 agent。`,
+          )
+          return
+        }
+        if (!this.isOwner(msg)) {
+          await this.reply(msg, '🔒 只有机器人 owner 可以切换运行时。')
+          return
+        }
+        if (this.busy.has(msg.chatId)) {
+          await this.reply(msg, '⏳ 当前任务仍在执行，请等待完成后再切换运行时。')
+          return
+        }
+        if (!isRuntimeId(command.value, this.installedIds())) {
+          await this.reply(
+            msg,
+            `❓ 未安装运行时 \`${command.value}\`。已安装: ${installed || '（无）'}。不会改绑。`,
+          )
+          return
+        }
+        const previous = this.adapters.get(current.id)
+        this.chatRuntimes.set(msg.chatId, command.value)
+        await previous?.dispose(msg.chatId)
+        await this.reply(msg, `🧷 本群已钉到 \`${command.value}\`（新会话生效）。断线不会改绑。`)
         return
       }
       case 'unknown':
@@ -533,6 +627,18 @@ export class LarkBridge {
     chatId: string,
   ): Promise<void> {
     const cwd = await resolveWorkspace(this.config.workspaceRoot, chatId)
+    const pinned = this.chatRuntime(chatId)
+    const adapter = pinned.runtime === undefined ? undefined : this.adapters.get(pinned.id)
+    if (!adapter) {
+      throw new Error(
+        `pinned runtime ${JSON.stringify(pinned.id)} is not installed; refusing to retarget this chat`,
+      )
+    }
+    if (!(await adapter.isAvailable())) {
+      throw new Error(
+        `pinned runtime ${JSON.stringify(pinned.id)} is down; refusing to retarget this chat`,
+      )
+    }
     const modelOverride = this.chatModels.get(chatId)
     // Per-chat preset override (owner `/preset`); `undefined` falls back to
     // the accessMode-derived preset from the plugin route. `full` maps to the
@@ -591,7 +697,7 @@ export class LarkBridge {
     let doneReason = ''
     let errored: string | undefined
 
-    const session = await this.binding.ensureSession(
+    const session = await adapter.ensureSession(
       chatId,
       cwd,
       (event: BridgeEvent) => {
@@ -644,7 +750,7 @@ export class LarkBridge {
           // forever; abort the session at the configured hard deadline.
           while (!done) {
             if (Date.now() >= deadline) {
-              await this.binding.dispose(chatId).catch(err =>
+              await adapter.dispose(chatId).catch(err =>
                 this.log('warn', 'failed to dispose timed-out session', err),
               )
               throw new Error(`agent turn timed out after ${this.config.turnTimeoutMs}ms`)
