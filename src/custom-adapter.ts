@@ -9,7 +9,7 @@
  * Set `LARK_BRIDGE_CUSTOM_ADAPTER` to the module path. The adapter's `id`
  * is what `/agent` pins; kind should be `custom` (spawn or attach).
  *
- * @module dsh-lark-bridge/custom-adapter
+ * @module lark-agent-bridge/custom-adapter
  */
 
 import { pathToFileURL } from 'node:url'

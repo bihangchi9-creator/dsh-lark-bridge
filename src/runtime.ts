@@ -6,7 +6,7 @@
  * pinned runtime is missing or down (IDE window closed), the turn fails
  * closed instead of retargeting.
  *
- * @module dsh-lark-bridge/runtime
+ * @module lark-agent-bridge/runtime
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

@@ -1,5 +1,5 @@
 #!/usr/bin/env pwsh
-# setup.ps1 — Windows (PowerShell) one-command install of dsh-lark-bridge (bundle mode).
+# setup.ps1 — Windows (PowerShell) one-command install of lark-agent-bridge (bundle mode).
 # Mirror of scripts/setup.sh; idempotent (safe to re-run).
 #
 # What it does:
@@ -23,10 +23,10 @@ $DshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME '.dsh' }
 $Profile = if ($env:DSH_PROFILE) { $env:DSH_PROFILE } else { 'web' }
 $ProfileDir = Join-Path $DshHome (Join-Path 'profiles' $Profile)
 $Manifest = Join-Path $ProfileDir 'package.json'
-$Link = Join-Path $ProfileDir (Join-Path 'node_modules' 'dsh-lark-bridge')
+$Link = Join-Path $ProfileDir (Join-Path 'node_modules' 'lark-agent-bridge')
 $LarkToolLink = Join-Path $ProfileDir (Join-Path 'node_modules' 'dsh-tool-lark-cli')
 
-Write-Host '==> dsh-lark-bridge setup'
+Write-Host '==> lark-agent-bridge setup'
 Write-Host "    project : $ProjectDir"
 Write-Host "    profile : $ProfileDir"
 
@@ -173,7 +173,7 @@ else {
     if ($null -eq $pkg.dependencies) {
         $pkg | Add-Member -NotePropertyName 'dependencies' -NotePropertyValue ([pscustomobject]@{})
     }
-    $pkg.dependencies | Add-Member -NotePropertyName 'dsh-lark-bridge' -NotePropertyValue "link:$ProjectDir" -Force
+    $pkg.dependencies | Add-Member -NotePropertyName 'lark-agent-bridge' -NotePropertyValue "link:$ProjectDir" -Force
     $pkg.dependencies | Add-Member -NotePropertyName 'dsh-tool-lark-cli' -NotePropertyValue "link:$LarkToolDir" -Force
     if ($null -eq $pkg.dsh) {
         $pkg | Add-Member -NotePropertyName 'dsh' -NotePropertyValue ([pscustomobject]@{})
@@ -182,8 +182,8 @@ else {
         $pkg.dsh | Add-Member -NotePropertyName 'profile' -NotePropertyValue ([pscustomobject]@{})
     }
     $bundles = @($pkg.dsh.profile.bundles)
-    if ($bundles -notcontains 'dsh-lark-bridge') {
-        $pkg.dsh.profile | Add-Member -NotePropertyName 'bundles' -NotePropertyValue @($bundles + 'dsh-lark-bridge') -Force
+    if ($bundles -notcontains 'lark-agent-bridge') {
+        $pkg.dsh.profile | Add-Member -NotePropertyName 'bundles' -NotePropertyValue @($bundles + 'lark-agent-bridge') -Force
     }
     $json = $pkg | ConvertTo-Json -Depth 10
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -201,8 +201,8 @@ foreach ($entry in @(
     }
 }
 $check = Get-Content $Manifest -Raw | ConvertFrom-Json
-if (@($check.dsh.profile.bundles) -notcontains 'dsh-lark-bridge') {
-    Write-Error 'installation incomplete: dsh-lark-bridge is not registered as a bundle'
+if (@($check.dsh.profile.bundles) -notcontains 'lark-agent-bridge') {
+    Write-Error 'installation incomplete: lark-agent-bridge is not registered as a bundle'
     exit 1
 }
 Write-Host '==> verified bridge bundle + dsh-tool-lark-cli dependency'

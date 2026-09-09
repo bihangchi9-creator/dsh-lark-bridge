@@ -1,5 +1,5 @@
 /**
- * Per-chat preset overrides for dsh-lark-bridge.
+ * Per-chat preset overrides for lark-agent-bridge.
  *
  * `accessMode` (env) sets the default tier for every chat; `/preset` lets the
  * owner pin a specific chat to another tier. The shipped vocabulary is the
@@ -7,7 +7,7 @@
  * (id:preset-name pairs) — e.g. an internal-only preset that stays out of the
  * public repo. Persisted to `~/.dsh-lark-bridge/chat-presets.json`.
  *
- * @module dsh-lark-bridge/chat-preset
+ * @module lark-agent-bridge/chat-preset
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

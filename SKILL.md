@@ -16,7 +16,7 @@ conversation = one pinned runtime.**
 This skill ships:
 
 - **dsh plugin** (in-process, `pnpm setup` + `dsh web`)
-- **CLI daemon** (`dsh-lark-bridge` / `node lib/daemon.js`) that **spawns**
+- **CLI daemon** (`lark-agent-bridge` / `node lib/daemon.js`) that **spawns**
   `traex` or `codex`
 - **IDE attach**: Unix-socket JSONL sidecar (`LARK_BRIDGE_IDE_SOCKET`).
   Window closed / socket gone ⇒ this line is down; the pin is kept.
@@ -70,7 +70,7 @@ Independent of dsh and of any IDE window.
 1. `pnpm install && pnpm build`
 2. Put `traex` and/or `codex` on PATH (or set `LARK_BRIDGE_TRAEX_BIN` /
    `LARK_BRIDGE_CODEX_BIN`).
-3. `node lib/daemon.js` (or `npx dsh-lark-bridge` after install).
+3. `node lib/daemon.js` (or `npx lark-agent-bridge` after install).
 4. Optional: `LARK_BRIDGE_RUNTIME=traex` to choose the default pin.
 5. Same QR wizard as the plugin if credentials are missing.
 

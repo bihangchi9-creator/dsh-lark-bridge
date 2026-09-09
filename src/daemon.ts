@@ -10,7 +10,7 @@
  *   LARK_BRIDGE_IDE_SOCKET=/tmp/ide.sock node lib/daemon.js
  *   LARK_BRIDGE_CUSTOM_ADAPTER=./examples/custom-adapter.mjs node lib/daemon.js
  *
- * @module dsh-lark-bridge/daemon
+ * @module lark-agent-bridge/daemon
  */
 
 import { resolve } from 'node:path'
@@ -29,7 +29,7 @@ function makeLogger(): LogFn {
   return (level, msg, extra) => {
     // eslint-disable-next-line no-console
     console[level](
-      `[dsh-lark-bridge] ${msg}`,
+      `[lark-agent-bridge] ${msg}`,
       extra === undefined ? '' : sanitizeLogValue(extra),
     )
   }
@@ -58,7 +58,7 @@ export function resolveDefaultRuntimeId(
 ): string {
   if (adapters.length === 0) {
     throw new Error(
-      'dsh-lark-bridge daemon: no runtime configured. Put traex/codex on PATH, ' +
+      'lark-agent-bridge daemon: no runtime configured. Put traex/codex on PATH, ' +
         'or set LARK_BRIDGE_IDE_SOCKET / LARK_BRIDGE_CUSTOM_ADAPTER. ' +
         'dsh still uses the plugin path (`dsh web`), not this process.',
     )
@@ -66,7 +66,7 @@ export function resolveDefaultRuntimeId(
   if (!preferred) return adapters[0]!.id
   if (adapters.some(adapter => adapter.id === preferred)) return preferred
   throw new Error(
-    `dsh-lark-bridge daemon: LARK_BRIDGE_RUNTIME=${JSON.stringify(preferred)} is not installed`,
+    `lark-agent-bridge daemon: LARK_BRIDGE_RUNTIME=${JSON.stringify(preferred)} is not installed`,
   )
 }
 
@@ -117,7 +117,7 @@ function isMainModule(): boolean {
 if (isMainModule()) {
   startDaemon().catch(err => {
     // eslint-disable-next-line no-console
-    console.error('[dsh-lark-bridge] daemon failed', err instanceof Error ? err.message : err)
+    console.error('[lark-agent-bridge] daemon failed', err instanceof Error ? err.message : err)
     process.exitCode = 1
   })
 }

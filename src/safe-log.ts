@@ -6,7 +6,7 @@
  * to console: reduce Error-like values to a small diagnostic summary and
  * recursively redact ordinary metadata.
  *
- * @module dsh-lark-bridge/safe-log
+ * @module lark-agent-bridge/safe-log
  */
 
 export type LogLevel = 'info' | 'warn' | 'error'

@@ -6,7 +6,7 @@
  * window; a custom agent implements the same methods. Runtimes never
  * silently replace each other — the chat's pin is the authority.
  *
- * @module dsh-lark-bridge/adapter
+ * @module lark-agent-bridge/adapter
  */
 
 import type { BridgeEvent, BridgeSession } from './dsh-binding.js'

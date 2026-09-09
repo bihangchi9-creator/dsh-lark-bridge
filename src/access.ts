@@ -1,5 +1,5 @@
 /**
- * Access control for dsh-lark-bridge — the "who may drive this bot" gate.
+ * Access control for lark-agent-bridge — the "who may drive this bot" gate.
  *
  * The security boundary of this plugin is exactly "who can send the bot a
  * message": every inbound message becomes an agent turn with host-level
@@ -17,7 +17,7 @@
  * Pure function on purpose: the decision logic is unit-tested without any
  * Feishu or dsh machinery.
  *
- * @module dsh-lark-bridge/access
+ * @module lark-agent-bridge/access
  */
 
 /** Allowlists plus the resolved owner id. */

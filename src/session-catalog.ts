@@ -15,7 +15,7 @@
  * so pre-upgrade logs are resumed once and then recorded; generation n > 0
  * uses `lark-<chatId>-<n>`.
  *
- * @module dsh-lark-bridge/session-catalog
+ * @module lark-agent-bridge/session-catalog
  */
 
 import { createHash } from 'node:crypto'

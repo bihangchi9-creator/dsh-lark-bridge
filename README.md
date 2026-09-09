@@ -1,6 +1,6 @@
 # Lark Agent Bridge
 
-<sub>npm package / repo: `dsh-lark-bridge` (name kept for install compatibility)</sub>
+<sub>npm package: `lark-agent-bridge` · git repo: `dsh-lark-bridge` (repo name kept; clone paths below are unchanged)</sub>
 
 > A Feishu / Lark bridge for local coding agents — *one group, one conversation, one pinned runtime*. Bridges **dsh** (in-process plugin), **CLI** agents (`traex` / `codex`, spawned by a daemon), an **IDE** window (attached over a socket), or a **custom** agent — behind one gateway.
 
@@ -26,7 +26,7 @@ Send a message in a Feishu chat, and a real coding agent — with its own tools,
 ①  Feishu Open Platform      ← register a bot here (auto QR wizard does it for you)
         │  gives: app_id + app_secret
         ▼
-②  dsh-lark-bridge gateway    ← holds the keys, opens a WebSocket to Feishu,
+②  lark-agent-bridge gateway  ← holds the keys, opens a WebSocket to Feishu,
         │                        turns each message into one agent turn,
         │                        routes each chat to its pinned runtime
         ▼
@@ -111,8 +111,8 @@ dsh plugin --profile web add link:/path/to/dsh-lark-bridge
 `dsh plugin` runs `pnpm add` in the profile directory and **auto-reconciles
 `dsh.profile.bundles`**: a package that declares `dsh.bundle` joins the layer
 stack automatically. Remove/update with the same family:
-`dsh plugin --profile web remove dsh-lark-bridge` /
-`dsh plugin --profile web update dsh-lark-bridge`.
+`dsh plugin --profile web remove lark-agent-bridge` /
+`dsh plugin --profile web update lark-agent-bridge`.
 
 > ⚠️ A `link:` install points the profile dependency at THIS directory. If you
 > later move or delete it, the next `dsh web` cannot resolve the bundle and
@@ -141,7 +141,7 @@ ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-lark-bridge
 #    New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\web\node_modules\dsh-lark-bridge" -Target (Get-Location).Path
 
 # 3. Append the package name to dsh.profile.bundles in ~/.dsh/profiles/web/package.json:
-#    "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-lark-bridge"]
+#    "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "lark-agent-bridge"]
 ```
 
 Launch dsh (the bundle loads the plugin automatically):
@@ -302,7 +302,7 @@ cp -r presets/lark-workspace presets/lark-readonly ~/.dsh/.agent-presets/
 
 ## Pairs well with lark-cli
 
-If you already use [`lark-cli`](https://github.com/larksuite/cli) / the Lark skills to drive Feishu (docs, sheets, IM, calendar…), this plugin slots in beside it: keep using `lark-cli` for structured Feishu operations, and let **dsh-lark-bridge** be the conversational coding agent living in your group chats. You're very welcome to combine the two — for example, ask the agent in a group to draft something, then use `lark-cli` skills to push it into a Feishu doc.
+If you already use [`lark-cli`](https://github.com/larksuite/cli) / the Lark skills to drive Feishu (docs, sheets, IM, calendar…), this plugin slots in beside it: keep using `lark-cli` for structured Feishu operations, and let **Lark Agent Bridge** be the conversational coding agent living in your group chats. You're very welcome to combine the two — for example, ask the agent in a group to draft something, then use `lark-cli` skills to push it into a Feishu doc.
 
 ## Troubleshooting
 
@@ -313,7 +313,7 @@ If you already use [`lark-cli`](https://github.com/larksuite/cli) / the Lark ski
 
 ## Credits
 
-`dsh-lark-bridge` is a creative extension of [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge) (originally `feishu-claude-code-bridge`) by [zarazhangrui](https://github.com/zarazhangrui), by way of [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark). This project is a native DeepSeek Harness plugin reimplementation. All original work remains under its MIT license; see [LICENSE](./LICENSE) and [NOTICE](./NOTICE) for the full copyright chain.
+**Lark Agent Bridge** (npm `lark-agent-bridge`, repo `dsh-lark-bridge`) is a creative extension of [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge) (originally `feishu-claude-code-bridge`) by [zarazhangrui](https://github.com/zarazhangrui), by way of [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark). This project is a native DeepSeek Harness plugin reimplementation. All original work remains under its MIT license; see [LICENSE](./LICENSE) and [NOTICE](./NOTICE) for the full copyright chain.
 
 ## License
 

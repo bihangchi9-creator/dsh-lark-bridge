@@ -1,5 +1,5 @@
 /**
- * Mutable, persisted allowlist for dsh-lark-bridge.
+ * Mutable, persisted allowlist for lark-agent-bridge.
  *
  * The env/config allowlist (`DSH_LARK_ALLOWED_CHATS`) is read-only at
  * runtime; this store adds a command-managed layer (owner `/allow` /
@@ -7,7 +7,7 @@
  * takes effect immediately — no restart needed. Effective access checks the
  * union of both layers.
  *
- * @module dsh-lark-bridge/allowlist
+ * @module lark-agent-bridge/allowlist
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'

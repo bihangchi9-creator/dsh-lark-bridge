@@ -6,7 +6,7 @@
  * re-registering, switching Feishu accounts, or pre-seeding credentials before
  * the first `dsh web` launch.
  *
- * @module dsh-lark-bridge/register-cli
+ * @module lark-agent-bridge/register-cli
  */
 
 import { runRegister } from './register.js'

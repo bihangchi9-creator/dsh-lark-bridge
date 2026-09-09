@@ -5,7 +5,7 @@
  * workspace root. The directory is created on first use so the agent's `cwd`
  * always exists before it runs a tool.
  *
- * @module dsh-lark-bridge/workspace
+ * @module lark-agent-bridge/workspace
  */
 
 import { mkdir } from 'node:fs/promises'

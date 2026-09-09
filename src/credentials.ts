@@ -1,7 +1,7 @@
 /**
- * Saved-credentials storage for dsh-lark-bridge.
+ * Saved-credentials storage for lark-agent-bridge.
  *
- * The registration wizard ({@link module:dsh-lark-bridge/register}) writes the
+ * The registration wizard ({@link module:lark-agent-bridge/register}) writes the
  * Feishu app credentials it obtains here, and {@link resolveConfig} reads them
  * as a fallback. This lets a user run the one-time `dsh-lark-register` wizard,
  * scan a QR, and then launch the plugin with no manual credential handling.
@@ -9,7 +9,7 @@
  * The file lives at `~/.dsh-lark-bridge/credentials.json` and is written with
  * owner-only (0600) permissions because it holds an app secret.
  *
- * @module dsh-lark-bridge/credentials
+ * @module lark-agent-bridge/credentials
  */
 
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

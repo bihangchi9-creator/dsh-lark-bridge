@@ -16,7 +16,7 @@
  *   tool/result                      -> { type: 'tool_result', id, isError }
  *   turn/end                         -> { type: 'done', reason }
  *
- * @module dsh-lark-bridge/dsh-binding
+ * @module lark-agent-bridge/dsh-binding
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -162,7 +162,7 @@ export async function mountPresetFailClosed(
   if (!presets) {
     if (preset !== undefined) {
       throw new Error(
-        `dsh-lark-bridge: required preset ${JSON.stringify(preset)} cannot be mounted because the agentPresets service is unavailable`,
+        `lark-agent-bridge: required preset ${JSON.stringify(preset)} cannot be mounted because the agentPresets service is unavailable`,
       )
     }
     return
@@ -172,7 +172,7 @@ export async function mountPresetFailClosed(
   } catch (cause) {
     if (preset === undefined) throw cause
     throw new Error(
-      `dsh-lark-bridge: required preset ${JSON.stringify(preset)} is unavailable; refusing to fall back to the deployment default`,
+      `lark-agent-bridge: required preset ${JSON.stringify(preset)} is unavailable; refusing to fall back to the deployment default`,
       { cause },
     )
   }

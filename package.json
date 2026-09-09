@@ -1,13 +1,13 @@
 {
-  "name": "dsh-lark-bridge",
+  "name": "lark-agent-bridge",
   "version": "0.0.1",
   "description": "Feishu/Lark bridge for local coding agents — one group, one conversation, one pinned runtime. Bridges dsh, CLI agents (traex/codex), an IDE window, or a custom agent behind one gateway.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "bin": {
-    "dsh-lark-register": "lib/register-cli.js",
-    "dsh-lark-bridge": "lib/daemon.js"
+    "lark-agent-register": "lib/register-cli.js",
+    "lark-agent-bridge": "lib/daemon.js"
   },
   "exports": {
     ".": {
@@ -45,7 +45,10 @@
     "feishu",
     "lark",
     "bot",
-    "coding-agent"
+    "coding-agent",
+    "traex",
+    "codex",
+    "agent-bridge"
   ],
   "license": "MIT",
   "engines": {

@@ -5,7 +5,7 @@
  * Protocol is the one trae-to-lark already ships against: thread/turn/item
  * events, plus a duplicated agent_message shape across versions.
  *
- * @module dsh-lark-bridge/codex-jsonl
+ * @module lark-agent-bridge/codex-jsonl
  */
 
 import type { BridgeEvent } from './dsh-binding.js'

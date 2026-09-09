@@ -1,5 +1,5 @@
 /**
- * dsh-lark-bridge — a DeepSeek Harness plugin that bridges dsh agents to
+ * lark-agent-bridge — a DeepSeek Harness plugin that bridges dsh agents to
  * Feishu/Lark group chats.
  *
  * This is an "external protocol driver" in dsh's architecture: it injects the
@@ -14,7 +14,7 @@
  * otherwise comes from the plugin config block or environment variables; see
  * config.ts.
  *
- * @module dsh-lark-bridge
+ * @module lark-agent-bridge
  */
 
 import type { Context } from '@deepseek-ai/cordis'
@@ -66,7 +66,7 @@ export function apply(ctx: Context, config: LarkBridgeConfig = {}): void {
   try {
     applyInner(ctx, config, log)
   } catch (err) {
-    log('error', 'dsh-lark-bridge failed to initialize — the bot is offline, but dsh is unaffected', err)
+    log('error', 'lark-agent-bridge failed to initialize — the bot is offline, but dsh is unaffected', err)
   }
 }
 
@@ -145,7 +145,7 @@ function makeLogger(ctx: Context): LogFn {
   return (level, msg, extra) => {
     // eslint-disable-next-line no-console
     console[level](
-      `[dsh-lark-bridge] ${msg}`,
+      `[lark-agent-bridge] ${msg}`,
       extra === undefined ? '' : sanitizeLogValue(extra),
     )
   }

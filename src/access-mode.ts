@@ -1,5 +1,5 @@
 /**
- * Access-mode tiers for dsh-lark-bridge — how much of the host an agent
+ * Access-mode tiers for lark-agent-bridge — how much of the host an agent
  * created from a Feishu chat may touch.
  *
  * The blast radius of an agent turn is bounded by the *toolset* it mounts:
@@ -16,7 +16,7 @@
  * Pure module on purpose (no imports): unit-testable without any dsh or
  * Feishu machinery.
  *
- * @module dsh-lark-bridge/access-mode
+ * @module lark-agent-bridge/access-mode
  */
 
 /** The three privilege tiers. */
@@ -38,7 +38,7 @@ export function parseAccessMode(raw: string | undefined, fallback: AccessMode): 
   const value = raw.trim().toLowerCase()
   if (value === 'read-only' || value === 'workspace' || value === 'full') return value
   throw new Error(
-    `dsh-lark-bridge: invalid accessMode ${JSON.stringify(raw)} — ` +
+    `lark-agent-bridge: invalid accessMode ${JSON.stringify(raw)} — ` +
       `expected one of: read-only, workspace, full`,
   )
 }

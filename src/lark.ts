@@ -7,7 +7,7 @@
  * wire peer, {@link AgentAdapter} is the pinned runtime, and each group chat
  * maps to one long-lived session with its own project directory.
  *
- * @module dsh-lark-bridge/lark
+ * @module lark-agent-bridge/lark
  */
 
 import type { LarkChannel, LarkChannelOptions, NormalizedMessage } from '@larksuite/channel'
@@ -124,7 +124,7 @@ export class LarkBridge {
       appId: config.appId,
       appSecret: config.appSecret,
       domain: domainFor(config.tenant),
-      source: 'dsh-lark-bridge',
+      source: 'lark-agent-bridge',
       policy: {
         dmMode: config.allowDm ? 'open' : 'disabled',
         requireMention: config.requireMention,
@@ -136,7 +136,7 @@ export class LarkBridge {
       respectProxyEnv: true,
     }
     if (adapters.length === 0) {
-      throw new Error('dsh-lark-bridge: at least one runtime adapter is required')
+      throw new Error('lark-agent-bridge: at least one runtime adapter is required')
     }
     this.channel = createLarkChannel(opts)
     this.ownerId = config.ownerId
@@ -151,7 +151,7 @@ export class LarkBridge {
     }))
     this.defaultRuntimeId = defaultRuntimeId ?? adapters[0]!.id
     if (!this.adapters.has(this.defaultRuntimeId)) {
-      throw new Error(`dsh-lark-bridge: default runtime ${JSON.stringify(this.defaultRuntimeId)} is not installed`)
+      throw new Error(`lark-agent-bridge: default runtime ${JSON.stringify(this.defaultRuntimeId)} is not installed`)
     }
     this.chatRuntimes = new ChatRuntimeStore(chatRuntimePath())
   }
@@ -241,7 +241,7 @@ export class LarkBridge {
       error: err => this.log('warn', 'channel error', err),
     })
     await this.channel.connect()
-    this.log('info', `dsh-lark-bridge connected (${this.config.tenant})`)
+    this.log('info', `lark-agent-bridge connected (${this.config.tenant})`)
 
     // The bot's own identity ("this id is you") for the bridge metadata.
     try {

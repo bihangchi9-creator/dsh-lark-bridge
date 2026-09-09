@@ -10,7 +10,7 @@
  *   gateway → { type: "prompt", chatId, cwd, text }
  *   sidecar → BridgeEvent JSON lines, ending with { type: "done" | "error" }
  *
- * @module dsh-lark-bridge/ide-adapter
+ * @module lark-agent-bridge/ide-adapter
  */
 
 import { accessSync, constants } from 'node:fs'

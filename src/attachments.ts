@@ -1,5 +1,5 @@
 /**
- * Message attachment support for dsh-lark-bridge — images and files sent to
+ * Message attachment support for lark-agent-bridge — images and files sent to
  * the bot are downloaded into the chat's own workspace and handed to the
  * agent as file paths (the agent reads images via `read_image`).
  *
@@ -13,7 +13,7 @@
  *   - a count cap per message with a loud rejection summary;
  *   - files older than a week are swept on each download (best-effort).
  *
- * @module dsh-lark-bridge/attachments
+ * @module lark-agent-bridge/attachments
  */
 
 import { mkdir, readdir, rm, stat } from 'node:fs/promises'

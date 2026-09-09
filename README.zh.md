@@ -1,6 +1,6 @@
 # Lark Agent Bridge
 
-<sub>npm 包 / 仓库名：`dsh-lark-bridge`（沿用旧名以兼容现有安装）</sub>
+<sub>npm 包：`lark-agent-bridge` · git 仓库：`dsh-lark-bridge`（仓库名沿用，下方克隆路径不变）</sub>
 
 > 把本地编码智能体接到**飞书 / Lark 群聊**——*一个群，一段对话，一条钉死的运行时*。可桥接 **dsh**（进程内插件）、**CLI** 智能体（`traex` / `codex`，由 daemon spawn）、**IDE** 窗口（socket attach）或**自研** agent，统一走一个网关。
 
@@ -26,7 +26,7 @@
 ①  飞书开放平台            ← 在这里注册机器人（自动二维码向导帮你搞定）
         │  给你: app_id + app_secret
         ▼
-②  dsh-lark-bridge 网关     ← 拿着钥匙，主动连飞书长连接，
+②  lark-agent-bridge 网关   ← 拿着钥匙，主动连飞书长连接，
         │                     把每条消息变成一个回合，
         │                     按 chat 路由到它钉住的运行时
         ▼
@@ -96,7 +96,7 @@ pnpm install && pnpm build          # 必需——link 安装会从本目录拉�
 dsh plugin --profile web add link:/path/to/dsh-lark-bridge
 ```
 
-`dsh plugin` 会在 profile 目录里执行 `pnpm add`，并**自动把声明了 `dsh.bundle` 的包加进 `dsh.profile.bundles`**。卸载/升级同样是官方命令：`dsh plugin --profile web remove dsh-lark-bridge` / `dsh plugin --profile web update dsh-lark-bridge`。
+`dsh plugin` 会在 profile 目录里执行 `pnpm add`，并**自动把声明了 `dsh.bundle` 的包加进 `dsh.profile.bundles`**。卸载/升级同样是官方命令：`dsh plugin --profile web remove lark-agent-bridge` / `dsh plugin --profile web update lark-agent-bridge`。
 
 > ⚠️ `link:` 安装会把 profile 依赖指向**本目录**。之后若移动或删除本目录，下次 `dsh web` 无法解析 bundle 而**启动失败**。请保持 clone 位置不变，或改用方式一。
 
@@ -123,7 +123,7 @@ ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-lark-bridge
 #    New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\web\node_modules\dsh-lark-bridge" -Target (Get-Location).Path
 
 # 3. 在 ~/.dsh/profiles/web/package.json 的 dsh.profile.bundles 末尾加上包名：
-#    "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "dsh-lark-bridge"]
+#    "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "lark-agent-bridge"]
 ```
 
 启动（**裸命令即可，插件随 bundle 自动加载**）：
@@ -265,7 +265,7 @@ cp -r presets/lark-workspace presets/lark-readonly ~/.dsh/.agent-presets/
 
 ## 与 lark-cli 搭配使用
 
-如果你已经在用 [`lark-cli`](https://github.com/larksuite/cli) / Lark 系列 skill 来操作飞书（文档、表格、IM、日历……），本插件正好和它互补：继续用 `lark-cli` 做结构化的飞书操作，让 **dsh-lark-bridge** 做那个「住在群聊里的对话式编码智能体」。**非常欢迎把两者结合起来用**——比如在群里让智能体起草内容，再用 `lark-cli` 的 skill 把它推进飞书文档。
+如果你已经在用 [`lark-cli`](https://github.com/larksuite/cli) / Lark 系列 skill 来操作飞书（文档、表格、IM、日历……），本插件正好和它互补：继续用 `lark-cli` 做结构化的飞书操作，让 **Lark Agent Bridge** 做那个「住在群聊里的对话式编码智能体」。**非常欢迎把两者结合起来用**——比如在群里让智能体起草内容，再用 `lark-cli` 的 skill 把它推进飞书文档。
 
 ## 排障
 
@@ -276,7 +276,7 @@ cp -r presets/lark-workspace presets/lark-readonly ~/.dsh/.agent-presets/
 
 ## 致谢
 
-`dsh-lark-bridge` 是对 [zarazhangrui](https://github.com/zarazhangrui) 的 [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge)（最初名为 `feishu-claude-code-bridge`）的二创，经由 [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark) 演化而来。本项目是一个 dsh 原生插件的从零重写。所有原始工作仍遵循其 MIT 许可；完整的版权链见 [LICENSE](./LICENSE) 与 [NOTICE](./NOTICE)。
+**Lark Agent Bridge**（npm `lark-agent-bridge`，仓库 `dsh-lark-bridge`）是对 [zarazhangrui](https://github.com/zarazhangrui) 的 [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge)（最初名为 `feishu-claude-code-bridge`）的二创，经由 [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark) 演化而来。本项目是一个 dsh 原生插件的从零重写。所有原始工作仍遵循其 MIT 许可；完整的版权链见 [LICENSE](./LICENSE) 与 [NOTICE](./NOTICE)。
 
 ## 许可
 

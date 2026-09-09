@@ -5,7 +5,7 @@
  * manage its own session: reset context, inspect the working directory, switch
  * model, or read help. Anything not starting with `/` is an agent prompt.
  *
- * @module dsh-lark-bridge/commands
+ * @module lark-agent-bridge/commands
  */
 
 /** A recognized command plus its raw argument tail. */
@@ -63,7 +63,7 @@ export function parseCommand(text: string): Command | undefined {
 
 /** The help text shown for `/help`. */
 export const HELP_TEXT = [
-  '**dsh-lark-bridge** — Feishu bridge for a local coding agent',
+  '**lark-agent-bridge** — Feishu bridge for a local coding agent',
   '',
   'Send any message to talk to the coding agent. This chat has its own project folder, its own conversation, and one pinned runtime. Other groups do not share this session.',
   '',

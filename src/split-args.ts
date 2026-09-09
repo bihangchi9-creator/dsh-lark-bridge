@@ -4,7 +4,7 @@
  * single/double quotes. A backslash escapes only whitespace, quotes, or another
  * backslash; otherwise it is preserved so Windows paths survive intact.
  *
- * @module dsh-lark-bridge/split-args
+ * @module lark-agent-bridge/split-args
  */
 
 export function splitArgs(input: string): string[] {

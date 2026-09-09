@@ -6,7 +6,7 @@
  * binary makes {@link isAvailable} false; the gateway then fails closed
  * instead of retargeting the chat.
  *
- * @module dsh-lark-bridge/cli-adapter
+ * @module lark-agent-bridge/cli-adapter
  */
 
 import { accessSync, constants, mkdirSync, readFileSync, writeFileSync } from 'node:fs'

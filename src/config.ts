@@ -1,5 +1,5 @@
 /**
- * Plugin configuration for dsh-lark-bridge.
+ * Plugin configuration for lark-agent-bridge.
  *
  * Every field can be supplied two ways:
  *   1. Inline in the profile's `cordis.patch.yml` (a `config:` block under the
@@ -10,7 +10,7 @@
  * unset field from `process.env` so a bare install works with just the two
  * Feishu app secrets and a DeepSeek key exported in the shell.
  *
- * @module dsh-lark-bridge/config
+ * @module lark-agent-bridge/config
  */
 
 import Schema from '@deepseek-ai/schemastery'
@@ -266,7 +266,7 @@ export function resolveConfig(config: LarkBridgeConfig): ResolvedConfig {
   const resolved = tryResolveConfig(config)
   if (resolved === undefined) {
     throw new Error(
-      'dsh-lark-bridge: missing Feishu credentials. Run the `dsh-lark-register` wizard ' +
+      'lark-agent-bridge: missing Feishu credentials. Run the `dsh-lark-register` wizard ' +
         'to create an app by QR, or set LARK_APP_ID and LARK_APP_SECRET ' +
         '(or appId/appSecret in the plugin config).',
     )

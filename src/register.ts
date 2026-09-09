@@ -1,5 +1,5 @@
 /**
- * The dsh-lark-bridge registration wizard.
+ * The lark-agent-bridge registration wizard.
  *
  * Asks Feishu to create a self-built app on your behalf, prints a QR code in
  * the terminal, and — once you scan it in the Feishu mobile app and confirm —
@@ -17,7 +17,7 @@
  * This flow mirrors the terminal wizard shipped by the upstream
  * lark-coding-agent-bridge / trae-to-lark projects (see NOTICE / README).
  *
- * @module dsh-lark-bridge/register
+ * @module lark-agent-bridge/register
  */
 
 import { registerApp } from '@larksuite/channel'
@@ -50,11 +50,11 @@ export interface RegisterHooks {
 export async function runRegister(hooks: RegisterHooks = {}): Promise<SavedCredentials> {
   const log = hooks.log ?? ((line: string) => console.log(line))
 
-  log('\n🔧 dsh-lark-bridge 飞书应用创建向导\n')
+  log('\n🔧 lark-agent-bridge 飞书应用创建向导\n')
   log('即将通过飞书开放平台为你自动创建一个自建应用，无需手动填写任何信息。\n')
 
   const result = await registerApp({
-    source: 'dsh-lark-bridge',
+    source: 'lark-agent-bridge',
     onQRCodeReady: info => {
       log('请用「飞书」手机 App 扫描下面的二维码，并在手机上确认创建应用：\n')
       qrcode.generate(info.url, { small: true })

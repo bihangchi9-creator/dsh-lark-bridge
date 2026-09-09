@@ -5,7 +5,7 @@
  * exposes {@link DshBinding} through the host-agnostic {@link AgentAdapter}
  * contract so later CLI/IDE adapters can sit beside it without a fallback.
  *
- * @module dsh-lark-bridge/dsh-adapter
+ * @module lark-agent-bridge/dsh-adapter
  */
 
 import type { AgentAdapter, AdapterRoute, BridgeEvent, BridgeSession } from './adapter.js'

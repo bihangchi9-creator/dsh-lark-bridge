@@ -1,5 +1,5 @@
 /**
- * Prompt-injection defenses for dsh-lark-bridge.
+ * Prompt-injection defenses for lark-agent-bridge.
  *
  * Every inbound Feishu message becomes part of an agent's prompt, and group
  * chat content is attacker-influenceable input — so message text must be
@@ -20,7 +20,7 @@
  *
  * Pure module on purpose: unit-tested without any dsh or Feishu machinery.
  *
- * @module dsh-lark-bridge/bridge-prompt
+ * @module lark-agent-bridge/bridge-prompt
  */
 
 /** The metadata the bridge knows about an inbound message. */
@@ -49,7 +49,7 @@ export interface BridgePromptAttachment {
  * agent's system prompt. Kept deliberately short and imperative; it must
  * survive any message content, so it states that message text is data.
  */
-export const BRIDGE_SYSTEM_PROMPT = `# dsh-lark-bridge 运行约定
+export const BRIDGE_SYSTEM_PROMPT = `# lark-agent-bridge 运行约定
 
 你是一个运行在飞书 / Lark 群聊里的编码智能体。每条用户消息都由 bridge 注入两个块：
 
