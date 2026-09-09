@@ -1,37 +1,41 @@
 # dsh-lark-bridge
 
-> A Feishu / Lark bridge for local coding agents — *one group, one conversation, one pinned runtime*. Today this repo ships the **dsh plugin**; CLI spawn and IDE attach share the same contract and come next.
+> A Feishu / Lark bridge for local coding agents — *one group, one conversation, one pinned runtime*. Bridges **dsh** (in-process plugin), **CLI** agents (`traex` / `codex`, spawned by a daemon), an **IDE** window (attached over a socket), or a **custom** agent — behind one gateway.
 
 [中文 README](./README.zh.md)
 
-Send a message in a Feishu chat, and a real dsh agent — with its own tools, its own project directory, and its own persistent conversation — answers you right there. Each group chat is an isolated workspace, so a team can run several projects in parallel, one per group.
+Send a message in a Feishu chat, and a real coding agent — with its own tools, its own project directory, and its own persistent conversation — answers you right there. Each group chat is an isolated workspace pinned to exactly one runtime, so a team can run several projects (and several agents) in parallel, one per group.
 
 ---
 
 ## What it does
 
-- **Feishu ⇄ dsh agent.** Inbound Feishu messages drive a live dsh agent through the host's `agents` service; the reply streams back onto a live-updating Feishu message.
-- **One group, one project folder.** Every chat id maps to a stable directory (`<workspaceRoot>/<chatId>`), created on first use. Different groups never touch each other's files.
+- **Feishu ⇄ your agent.** Inbound Feishu messages drive a live agent; the reply streams back onto a live-updating Feishu message. The agent is whichever runtime this chat is pinned to (dsh / CLI / IDE / custom).
+- **Four host classes, one contract.** Every runtime implements the same `AgentAdapter`: dsh runs in-process as a plugin; CLI **spawns** `traex`/`codex`; IDE **attaches** a running window; custom loads your own module. They never silently replace each other.
+- **One group, one conversation, one pinned runtime.** Every chat id maps to a stable directory (`<workspaceRoot>/<chatId>`) and one runtime chosen with `/agent`. Different groups never touch each other's files, and a message is never broadcast to several agents. If the pinned runtime is down (e.g. an IDE window closed), that chat fails closed instead of retargeting.
 - **Persistent per-chat sessions.** A chat's conversation survives restarts (policy-fingerprint-gated resume-or-create; `/new` really clears it).
 - **Files and images.** Send them to the bot and the bridge stores each message in an isolated `.attachments/<messageId>/` folder, then gives the paths to the agent. Limits: 5 attachments per message, images ≤10 MB, other files ≤20 MB; names are sanitized and stale files are swept after 7 days. Whether an image can actually be interpreted depends on the selected model's vision support.
-- **Zero-config setup.** On first launch, if no credentials exist, the plugin auto-runs a QR registration wizard — scan it in the Feishu app and it connects automatically. No portal spelunking.
+- **Zero-config setup.** On first launch, if no credentials exist, a QR registration wizard runs — scan it in the Feishu app and it connects automatically. No portal spelunking.
 - **Slash commands.** `/help`, `/new`, `/where`, `/models`, `/agent`, and `/whoami` manage each chat locally; owner-only `/agent`, `/model`, `/preset`, `/allow`, and `/disallow` change shared chat state. `/agent` pins this chat to one installed runtime and never silently retargets.
 
 ## Architecture in one picture
 
 ```
-①  Feishu Open Platform            ← register a bot here (auto QR wizard does it for you)
+①  Feishu Open Platform      ← register a bot here (auto QR wizard does it for you)
         │  gives: app_id + app_secret
         ▼
-②  dsh-lark-bridge  (this plugin)  ← holds the keys, opens a WebSocket to Feishu,
-        │                             turns each message into an agent turn
+②  dsh-lark-bridge gateway    ← holds the keys, opens a WebSocket to Feishu,
+        │                        turns each message into one agent turn,
+        │                        routes each chat to its pinned runtime
         ▼
-③  dsh host (DeepSeek Harness)     ← loads the plugin, provides the `agents` service
+③  the pinned runtime         ← one of:
+     • dsh    — in-process Cordis plugin (`dsh web`)
+     • CLI    — daemon spawns traex / codex
+     • IDE    — daemon attaches a running window over a socket
+     • custom — daemon loads your own AgentAdapter module
 ```
 
-The bot **registration lives entirely on Feishu**, not in dsh. dsh only *loads this plugin*; the plugin then connects out to Feishu over a long-lived WebSocket (so no public IP or callback URL is needed).
-
-CLI / IDE / custom agents use a **separate daemon**, not this plugin:
+The bot **registration lives entirely on Feishu**. The gateway connects out to Feishu over a long-lived WebSocket (so no public IP or callback URL is needed). For **dsh** the gateway *is* the plugin loaded by `dsh web`; for **CLI / IDE / custom** it is a **separate daemon** (`node lib/daemon.js`), independent of any dsh host.
 
 ```bash
 pnpm build
@@ -41,7 +45,7 @@ LARK_BRIDGE_IDE_SOCKET=/tmp/ide.sock node lib/daemon.js
 LARK_BRIDGE_CUSTOM_ADAPTER=./examples/custom-adapter.mjs node lib/daemon.js
 ```
 
-CLI **spawns** the binary. IDE **attaches** a Unix-socket JSONL sidecar (window closed ⇒ that line dies). Custom loads an `AgentAdapter` module. One group is still one conversation pinned with `/agent`; a dead line is not retargeted.
+CLI **spawns** the binary. IDE **attaches** a Unix-socket JSONL sidecar (window closed ⇒ that line dies). Custom loads an `AgentAdapter` module (see `examples/custom-adapter.mjs`). One group is still one conversation pinned with `/agent`; a dead line is not retargeted.
 
 ByteDance-only overlay (SSO, bytecli, extra presets) lives in a local `internal/` directory that is gitignored. Do not publish it to this GitHub repo; ship it through the internal skill marketplace.
 

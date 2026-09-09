@@ -1,37 +1,41 @@
 # dsh-lark-bridge
 
-> 把本地编码智能体接到**飞书 / Lark 群聊**——*一个群，一段对话，一条钉死的运行时*。当前仓库交付的是 **dsh 插件**；CLI spawn 与 IDE attach 共用同一套契约，后续切片再上。
+> 把本地编码智能体接到**飞书 / Lark 群聊**——*一个群，一段对话，一条钉死的运行时*。可桥接 **dsh**（进程内插件）、**CLI** 智能体（`traex` / `codex`，由 daemon spawn）、**IDE** 窗口（socket attach）或**自研** agent，统一走一个网关。
 
 [English README](./README.md)
 
-在飞书里发一条消息，一个真正的 dsh 智能体（带自己的工具、自己的项目目录、自己的持久对话）就在群里回你。每个群聊都是一个隔离的工作区，所以团队可以并行跑多个项目，一个群一个。
+在飞书里发一条消息，一个真正的编码智能体（带自己的工具、自己的项目目录、自己的持久对话）就在群里回你。每个群聊都是一个隔离的工作区，只钉一条运行时，所以团队可以并行跑多个项目、多个 agent，一个群一个。
 
 ---
 
 ## 它能做什么
 
-- **飞书 ⇄ dsh 智能体。** 飞书消息通过宿主的 `agents` 服务驱动一个活着的 dsh 智能体；回复以「实时更新的飞书消息」流式返回。
-- **一个群，一个项目文件夹。** 每个 chat id 映射到一个固定目录（`<workspaceRoot>/<chatId>`），首次使用时创建。不同群互不干扰彼此的文件。
+- **飞书 ⇄ 你的智能体。** 飞书消息驱动一个活着的智能体；回复以「实时更新的飞书消息」流式返回。回的是本群钉住的那条运行时（dsh / CLI / IDE / 自研）。
+- **四类宿主，一套契约。** 每条运行时都实现同一个 `AgentAdapter`：dsh 进程内当插件；CLI **spawn** `traex`/`codex`；IDE **attach** 正在跑的窗口；自研加载你自己的模块。线与线之间不互相顶替。
+- **一个群，一段对话，一条运行时。** 每个 chat id 映射到一个固定目录（`<workspaceRoot>/<chatId>`）和一条用 `/agent` 选定的运行时。不同群互不干扰文件，一条消息不会广播给多个 agent。钉的运行时挂了（比如 IDE 窗口关了），这个群 fail-closed，不改绑。
 - **按群持久会话。** 一个群的对话在重启后依然保留（按策略指纹门控的「恢复或新建」，`/new` 真正清空）。
-- **收文件。** 文件直接发给机器人即可——bridge 下载到本群工作区的 `.attachments/` 目录并把路径交给智能体。限制：每条消息最多 5 个附件，单文件 ≤20MB，超出会被明确拒绝；文件名自动消毒，7 天后自动清理。（图片暂不支持）
-- **零配置启动。** 首次启动若没有凭证，插件会自动跑二维码注册向导——用飞书 App 一扫就自动连上，不用去开放平台后台一步步翻。
+- **收文件。** 文件直接发给机器人即可——bridge 下载到本群工作区的 `.attachments/<messageId>/` 目录并把路径交给智能体。限制：每条消息最多 5 个附件，图片 ≤10MB，其它文件 ≤20MB，超出会被明确拒绝；文件名自动消毒，7 天后自动清理。图片能否被识别取决于所选模型的视觉能力。
+- **零配置启动。** 首次启动若没有凭证，会自动跑二维码注册向导——用飞书 App 一扫就自动连上，不用去开放平台后台一步步翻。
 - **斜杠命令。** `/help`、`/new`、`/where`、`/models`、`/agent`、`/whoami` 在本群本地管理；owner 可用 `/agent`、`/model`、`/preset`、`/allow`、`/disallow`。`/agent` 把本群钉到一条已安装运行时上，断线不会改绑。
 
 ## 一张图看懂架构
 
 ```
-①  飞书开放平台                    ← 在这里注册机器人（自动二维码向导帮你搞定）
+①  飞书开放平台            ← 在这里注册机器人（自动二维码向导帮你搞定）
         │  给你: app_id + app_secret
         ▼
-②  dsh-lark-bridge（本插件）        ← 拿着钥匙，主动连飞书长连接，
-        │                             把每条消息变成一个智能体回合
+②  dsh-lark-bridge 网关     ← 拿着钥匙，主动连飞书长连接，
+        │                     把每条消息变成一个回合，
+        │                     按 chat 路由到它钉住的运行时
         ▼
-③  dsh 宿主（DeepSeek Harness）     ← 加载本插件，提供 `agents` 服务
+③  钉住的运行时            ← 四选一：
+     • dsh    — 进程内 Cordis 插件（`dsh web`）
+     • CLI    — daemon spawn traex / codex
+     • IDE    — daemon attach 正在跑的窗口（socket）
+     • 自研   — daemon 加载你自己的 AgentAdapter 模块
 ```
 
-机器人**注册完全在飞书这一侧**，跟 dsh 无关。dsh 只负责「加载本插件」；插件再用 WebSocket **长连接**主动连到飞书（所以不需要公网 IP、也不需要回调地址）。
-
-CLI / IDE / 自研智能体走**独立 daemon**，不是这个插件：
+机器人**注册完全在飞书这一侧**。网关用 WebSocket **长连接**主动连飞书（所以不需要公网 IP、也不需要回调地址）。**dsh** 时网关就是 `dsh web` 加载的插件；**CLI / IDE / 自研** 时是一个**独立 daemon**（`node lib/daemon.js`），跟 dsh 宿主无关。
 
 ```bash
 pnpm build
@@ -41,7 +45,7 @@ LARK_BRIDGE_IDE_SOCKET=/tmp/ide.sock node lib/daemon.js
 LARK_BRIDGE_CUSTOM_ADAPTER=./examples/custom-adapter.mjs node lib/daemon.js
 ```
 
-CLI **spawn** 二进制；IDE **attach** Unix socket 上的 JSONL sidecar（窗口关了这条线断）；自研加载 `AgentAdapter` 模块。一个群仍然是一段对话，`/agent` 钉死，断线不改绑。
+CLI **spawn** 二进制；IDE **attach** Unix socket 上的 JSONL sidecar（窗口关了这条线断）；自研加载 `AgentAdapter` 模块（见 `examples/custom-adapter.mjs`）。一个群仍然是一段对话，`/agent` 钉死，断线不改绑。
 
 字节内部 overlay（SSO / bytecli / 扩展档位）在本地 `internal/`，已被 gitignore。不要推到这个 GitHub 仓库，走内部 skill 市场发布。
 
