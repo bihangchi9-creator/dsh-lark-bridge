@@ -1,4 +1,6 @@
-# dsh-lark-bridge
+# Lark Agent Bridge
+
+<sub>npm package / repo: `dsh-lark-bridge` (name kept for install compatibility)</sub>
 
 > A Feishu / Lark bridge for local coding agents — *one group, one conversation, one pinned runtime*. Bridges **dsh** (in-process plugin), **CLI** agents (`traex` / `codex`, spawned by a daemon), an **IDE** window (attached over a socket), or a **custom** agent — behind one gateway.
 

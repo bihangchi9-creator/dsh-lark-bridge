@@ -1,4 +1,6 @@
-# dsh-lark-bridge
+# Lark Agent Bridge
+
+<sub>npm 包 / 仓库名：`dsh-lark-bridge`（沿用旧名以兼容现有安装）</sub>
 
 > 把本地编码智能体接到**飞书 / Lark 群聊**——*一个群，一段对话，一条钉死的运行时*。可桥接 **dsh**（进程内插件）、**CLI** 智能体（`traex` / `codex`，由 daemon spawn）、**IDE** 窗口（socket attach）或**自研** agent，统一走一个网关。
 
