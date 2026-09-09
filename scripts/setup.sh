@@ -2,12 +2,13 @@
 # setup.sh — one-command install of dsh-lark-bridge into a dsh profile (bundle mode).
 #
 # What it does:
-#   1. preflight: Node version / pnpm / dsh profile
+#   1. preflight: Node version / dsh availability
 #   2. build the plugin if lib/ is missing
 #   3. install the lark-workspace / lark-readonly presets into the dsh
 #      harness-home preset root ($DSH_HOME/.agent-presets)
-#   4. symlink the plugin into the profile's node_modules
-#   5. register "dsh-lark-bridge" in the profile's dsh.profile.bundles
+#   4. install the bridge + workspace tool through dsh plugin (preferred), or
+#      link both into an already-initialized profile as a manual fallback
+#   5. verify both entries and the bundle registration
 #   6. print next steps
 #
 # After this, a bare `dsh web` loads the plugin automatically — no --patch flag.
@@ -42,6 +43,32 @@ if [ "$NODE_MAJOR" -lt 22 ]; then
   exit 1
 fi
 echo "    node    : $("$NODE_BIN" -v) (ok)"
+
+# Prefer dsh's official plugin manager. It owns profile initialization and can
+# create shipped profiles (web/headless) on first use. The repo-local binary is
+# accepted for source checkouts where dsh is not globally installed.
+DSH_BIN=""
+if command -v dsh >/dev/null 2>&1; then
+  DSH_BIN="$(command -v dsh)"
+elif [ -x "$PROJECT_DIR/node_modules/.bin/dsh" ]; then
+  DSH_BIN="$PROJECT_DIR/node_modules/.bin/dsh"
+fi
+
+# Without a dsh binary we can only use the manual manifest fallback. In that
+# case fail before building or copying presets when the profile is absent, so
+# a mistaken first run leaves no partial installation.
+if [ -z "$DSH_BIN" ] && [ ! -f "$MANIFEST" ]; then
+  echo "ERROR: dsh profile '$PROFILE' is not initialized yet." >&2
+  echo "       The dsh command is not available, so setup cannot initialize it." >&2
+  echo "       Install/ expose dsh in PATH and re-run 'pnpm setup', or initialize" >&2
+  echo "       the profile separately before using the manual fallback." >&2
+  exit 1
+fi
+if [ -n "$DSH_BIN" ]; then
+  echo "    dsh     : $DSH_BIN (official plugin install)"
+else
+  echo "    profile : initialized (manual fallback)"
+fi
 
 # 2. Build the bridge AND its shipped lark-cli tool if either entry is missing.
 #    The workspace preset references dsh-tool-lark-cli, so installing only the
@@ -87,42 +114,25 @@ else
   echo "    presets: none shipped in this checkout — skipping"
 fi
 
-# 4. The profile must exist (first `dsh web` run creates it)
-if [ ! -d "$PROFILE_DIR" ]; then
-  echo "ERROR: profile '$PROFILE' does not exist yet." >&2
-  echo "       Start dsh once (e.g. 'dsh web') so the profile is created, then re-run this script." >&2
-  exit 1
-fi
-
-# 5. Symlink the plugin into the profile's node_modules (bundle resolution anchor)
-mkdir -p "$PROFILE_DIR/node_modules"
-LINK="$PROFILE_DIR/node_modules/dsh-lark-bridge"
-if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
-  echo "ERROR: $LINK exists and is not a symlink — remove it first." >&2
-  exit 1
-fi
-if [ ! -L "$LINK" ]; then
-  ln -s "$PROJECT_DIR" "$LINK"
-  echo "==> linked $LINK -> $PROJECT_DIR"
-else
-  echo "==> link already present: $LINK"
-fi
-
-# 6. Install the tool dependency and register the bridge bundle. The tool is a
+# 4. Install the tool dependency and register the bridge bundle. The tool is a
 #    plain profile dependency (the workspace preset resolves it by package
 #    name); the bridge is a bundle and auto-registers through `dsh plugin`.
-if command -v dsh >/dev/null 2>&1; then
+#    `dsh plugin` also initializes a missing profile from the official template.
+if [ -n "$DSH_BIN" ]; then
   echo "==> installing workspace tool: dsh plugin --profile $PROFILE add link:$LARK_TOOL_DIR"
-  dsh plugin --profile "$PROFILE" add "link:$LARK_TOOL_DIR"
+  "$DSH_BIN" plugin --profile "$PROFILE" add "link:$LARK_TOOL_DIR"
   echo "==> registering bridge: dsh plugin --profile $PROFILE add link:$PROJECT_DIR"
-  dsh plugin --profile "$PROFILE" add "link:$PROJECT_DIR"
-elif [ -x "$PROJECT_DIR/node_modules/.bin/dsh" ]; then
-  echo "==> installing workspace tool + bridge via repo-local dsh"
-  "$PROJECT_DIR/node_modules/.bin/dsh" plugin --profile "$PROFILE" add "link:$LARK_TOOL_DIR"
-  "$PROJECT_DIR/node_modules/.bin/dsh" plugin --profile "$PROFILE" add "link:$PROJECT_DIR"
+  "$DSH_BIN" plugin --profile "$PROFILE" add "link:$PROJECT_DIR"
 else
   # Manual fallback (no `dsh` on PATH): create links for both packages and
   # record both dependencies. Only the bridge belongs in bundles.
+  mkdir -p "$PROFILE_DIR/node_modules"
+  LINK="$PROFILE_DIR/node_modules/dsh-lark-bridge"
+  if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
+    echo "ERROR: $LINK exists and is not a symlink — remove it first." >&2
+    exit 1
+  fi
+  [ -L "$LINK" ] || ln -s "$PROJECT_DIR" "$LINK"
   LARK_TOOL_LINK="$PROFILE_DIR/node_modules/dsh-tool-lark-cli"
   if [ -e "$LARK_TOOL_LINK" ] && [ ! -L "$LARK_TOOL_LINK" ]; then
     echo "ERROR: $LARK_TOOL_LINK exists and is not a symlink — remove it first." >&2
@@ -147,7 +157,7 @@ console.log('==> registered bridge + workspace tool in ' + path)
 EOF
 fi
 
-# 6b. Postcondition: installation is complete only when BOTH packages resolve
+# 4b. Postcondition: installation is complete only when BOTH packages resolve
 #     from the target profile and the bundle registry contains the bridge.
 "$NODE_BIN" - "$PROFILE_DIR" "$MANIFEST" <<'EOF'
 const fs = require('fs')

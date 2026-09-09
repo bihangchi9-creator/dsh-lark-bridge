@@ -53,8 +53,8 @@ pnpm setup            # macOS / Linux（scripts/setup.sh）——构建 + 链接
 pnpm setup:win        # Windows（scripts/setup.ps1）
 ```
 
-脚本会：预检 Node 版本 → **构建插件（构建失败会明确报错并中止）** → 把插件链接进 dsh profile → **注册为 bundle**（`dsh` 可用时内部直接走官方 `dsh plugin` 命令）。
-之后直接启动即可，**不需要 `--patch` 参数**：
+脚本会：预检 Node 版本 → **构建插件（构建失败会明确报错并中止）** → 安装权限档位 preset → 安装 `dsh-tool-lark-cli` → **注册 bridge bundle**。当 `dsh` 命令可用时，脚本直接走官方 `dsh plugin`，它会**自动初始化尚不存在的 `web` / `headless` profile**，无需先手动启动一次 `dsh web`。
+安装完成后直接启动即可，**不需要 `--patch` 参数**：
 
 ```bash
 # macOS / Linux
@@ -64,7 +64,7 @@ DSH_PERMISSION_MODE=danger-full-access dsh web
 $env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 ```
 
-> 换 profile：`DSH_PROFILE=headless pnpm setup`；自定义 dsh 目录：`DSH_HOME=/path/.dsh pnpm setup`（Windows 同样支持这两个环境变量）。
+> 换 profile：`DSH_PROFILE=headless pnpm setup`；自定义 dsh 目录：`DSH_HOME=/path/.dsh pnpm setup`（Windows 同样支持这两个环境变量）。如果系统里找不到 `dsh` 命令，脚本只能走手动 fallback，此时要求目标 profile 已经初始化；若不存在，脚本会在构建和复制 preset 之前退出，不留下半安装状态。
 
 ### 方式二：dsh 官方命令（务必先构建！）
 

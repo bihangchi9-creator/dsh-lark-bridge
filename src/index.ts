@@ -24,6 +24,7 @@ import { registerUrlPath, writeRegisterUrl } from './credentials.js'
 import { DshBinding } from './dsh-binding.js'
 import { LarkBridge } from './lark.js'
 import { runRegister } from './register.js'
+import { sanitizeLogValue, type LogFn } from './safe-log.js'
 
 /** The Cordis plugin name. */
 export const name = 'lark-bridge'
@@ -40,9 +41,6 @@ export const inject = ['agents']
 
 export { Config }
 export type { LarkBridgeConfig }
-
-/** Structured logger shape, falling back to console when Cordis has none. */
-type LogFn = (level: 'info' | 'warn' | 'error', msg: string, extra?: unknown) => void
 
 /**
  * Plugin entry. If credentials are present it wires the Feishu channel and
@@ -139,6 +137,9 @@ function applyInner(ctx: Context, config: LarkBridgeConfig, log: LogFn): void {
 function makeLogger(ctx: Context): LogFn {
   return (level, msg, extra) => {
     // eslint-disable-next-line no-console
-    console[level](`[dsh-lark-bridge] ${msg}`, extra ?? '')
+    console[level](
+      `[dsh-lark-bridge] ${msg}`,
+      extra === undefined ? '' : sanitizeLogValue(extra),
+    )
   }
 }

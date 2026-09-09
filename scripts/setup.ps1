@@ -3,11 +3,11 @@
 # Mirror of scripts/setup.sh; idempotent (safe to re-run).
 #
 # What it does:
-#   1. preflight: Node version / pnpm / dsh profile
+#   1. preflight: Node version / dsh availability
 #   2. build the plugin if lib/ is missing
-#   3. junction-link the plugin into the profile's node_modules
-#      (a directory junction needs no admin rights, unlike a symlink)
-#   4. register "dsh-lark-bridge" in the profile's dsh.profile.bundles
+#   3. install the lark-workspace / lark-readonly presets
+#   4. install the bridge + workspace tool through dsh plugin (preferred), or
+#      link both into an already-initialized profile as a manual fallback
 #   5. print next steps
 #
 # Usage:
@@ -24,6 +24,7 @@ $Profile = if ($env:DSH_PROFILE) { $env:DSH_PROFILE } else { 'web' }
 $ProfileDir = Join-Path $DshHome (Join-Path 'profiles' $Profile)
 $Manifest = Join-Path $ProfileDir 'package.json'
 $Link = Join-Path $ProfileDir (Join-Path 'node_modules' 'dsh-lark-bridge')
+$LarkToolLink = Join-Path $ProfileDir (Join-Path 'node_modules' 'dsh-tool-lark-cli')
 
 Write-Host '==> dsh-lark-bridge setup'
 Write-Host "    project : $ProjectDir"
@@ -41,6 +42,28 @@ if ($nodeMajor -lt 22) {
     exit 1
 }
 Write-Host "    node    : $(& node -v) (ok)"
+
+# Prefer dsh's official plugin manager. It owns profile initialization and can
+# create shipped profiles (web/headless) on first use.
+$DshCommand = Get-Command dsh -ErrorAction SilentlyContinue
+
+# Without dsh we can only use the manual manifest fallback. Fail before build
+# or preset copies if the profile is absent, leaving no partial installation.
+if (-not $DshCommand -and -not (Test-Path $Manifest -PathType Leaf)) {
+    Write-Error @"
+dsh profile '$Profile' is not initialized yet.
+The dsh command is not available, so setup cannot initialize it.
+Install or expose dsh in PATH and re-run 'pnpm setup:win', or initialize the
+profile separately before using the manual fallback.
+"@
+    exit 1
+}
+if ($DshCommand) {
+    Write-Host "    dsh     : $($DshCommand.Source) (official plugin install)"
+}
+else {
+    Write-Host '    profile : initialized (manual fallback)'
+}
 
 # 2. Build the bridge AND its shipped lark-cli tool if either entry is missing.
 #    The workspace preset references dsh-tool-lark-cli, so both are mandatory.
@@ -91,88 +114,83 @@ else {
     Write-Host '    presets: none shipped in this checkout - skipping'
 }
 
-# 4. The profile must exist (first `dsh web` run creates it)
-if (-not (Test-Path $ProfileDir)) {
-    Write-Error "profile '$Profile' does not exist yet. Start dsh once (e.g. 'dsh web') so the profile is created, then re-run this script."
-    exit 1
-}
-
-# 5. Link the plugin into the profile's node_modules.
-#    Windows: directory junction (no admin rights needed).
-#    macOS/Linux (pwsh): symbolic link — `-ItemType Junction` is a silent
-#    no-op on Unix, so branch on the OS explicitly.
+# 4. Install the workspace tool and bridge. The official plugin manager also
+#    initializes missing profiles. The manual fallback links both packages and
+#    updates an already-existing manifest.
 $IsWindowsOs = $env:OS -eq 'Windows_NT'
-$ModulesDir = Split-Path $Link
-New-Item -ItemType Directory -Force -Path $ModulesDir | Out-Null
-if (Test-Path $Link) {
-    $existing = Get-Item $Link -Force
-    if ($existing.LinkType -eq 'Junction' -or $existing.LinkType -eq 'SymbolicLink') {
-        Write-Host "==> link already present: $Link"
-    }
-    else {
-        Write-Error "$Link exists and is not a link - remove it first."
-        exit 1
-    }
+if ($DshCommand) {
+    Write-Host "==> installing workspace tool: dsh plugin --profile $Profile add link:$LarkToolDir"
+    & $DshCommand.Source plugin --profile $Profile add "link:$LarkToolDir"
+    if ($LASTEXITCODE -ne 0) { throw "dsh plugin failed with exit code $LASTEXITCODE" }
+    Write-Host "==> registering bridge: dsh plugin --profile $Profile add link:$ProjectDir"
+    & $DshCommand.Source plugin --profile $Profile add "link:$ProjectDir"
+    if ($LASTEXITCODE -ne 0) { throw "dsh plugin failed with exit code $LASTEXITCODE" }
 }
 else {
-    if ($IsWindowsOs) {
-        New-Item -ItemType Junction -Path $Link -Target $ProjectDir | Out-Null
+    $ModulesDir = Split-Path $Link
+    New-Item -ItemType Directory -Force -Path $ModulesDir | Out-Null
+    if (Test-Path $Link) {
+        $existing = Get-Item $Link -Force
+        if ($existing.LinkType -ne 'Junction' -and $existing.LinkType -ne 'SymbolicLink') {
+            Write-Error "$Link exists and is not a link - remove it first."
+            exit 1
+        }
     }
     else {
-        New-Item -ItemType SymbolicLink -Path $Link -Target $ProjectDir | Out-Null
+        if ($IsWindowsOs) {
+            New-Item -ItemType Junction -Path $Link -Target $ProjectDir | Out-Null
+        }
+        else {
+            New-Item -ItemType SymbolicLink -Path $Link -Target $ProjectDir | Out-Null
+        }
     }
-    # Verify the link actually landed — Unix junctions fail silently otherwise.
     if (-not (Test-Path $Link)) {
         Write-Error "link creation failed for $Link"
         exit 1
     }
-    Write-Host "==> linked $Link -> $ProjectDir"
-}
 
-# 6. Link the workspace tool, record BOTH link dependencies, and register only
-#    the bridge as a bundle. This mirrors the Unix install postconditions.
-$LarkToolLink = Join-Path $ProfileDir (Join-Path 'node_modules' 'dsh-tool-lark-cli')
-if (Test-Path $LarkToolLink) {
-    $existingTool = Get-Item $LarkToolLink -Force
-    if ($existingTool.LinkType -ne 'Junction' -and $existingTool.LinkType -ne 'SymbolicLink') {
-        Write-Error "$LarkToolLink exists and is not a link - remove it first."
-        exit 1
-    }
-}
-else {
-    if ($IsWindowsOs) {
-        New-Item -ItemType Junction -Path $LarkToolLink -Target $LarkToolDir | Out-Null
+    if (Test-Path $LarkToolLink) {
+        $existingTool = Get-Item $LarkToolLink -Force
+        if ($existingTool.LinkType -ne 'Junction' -and $existingTool.LinkType -ne 'SymbolicLink') {
+            Write-Error "$LarkToolLink exists and is not a link - remove it first."
+            exit 1
+        }
     }
     else {
-        New-Item -ItemType SymbolicLink -Path $LarkToolLink -Target $LarkToolDir | Out-Null
+        if ($IsWindowsOs) {
+            New-Item -ItemType Junction -Path $LarkToolLink -Target $LarkToolDir | Out-Null
+        }
+        else {
+            New-Item -ItemType SymbolicLink -Path $LarkToolLink -Target $LarkToolDir | Out-Null
+        }
     }
-}
-if (-not (Test-Path $LarkToolLink)) {
-    Write-Error "link creation failed for $LarkToolLink"
-    exit 1
+    if (-not (Test-Path $LarkToolLink)) {
+        Write-Error "link creation failed for $LarkToolLink"
+        exit 1
+    }
+
+    $pkg = Get-Content $Manifest -Raw | ConvertFrom-Json
+    if ($null -eq $pkg.dependencies) {
+        $pkg | Add-Member -NotePropertyName 'dependencies' -NotePropertyValue ([pscustomobject]@{})
+    }
+    $pkg.dependencies | Add-Member -NotePropertyName 'dsh-lark-bridge' -NotePropertyValue "link:$ProjectDir" -Force
+    $pkg.dependencies | Add-Member -NotePropertyName 'dsh-tool-lark-cli' -NotePropertyValue "link:$LarkToolDir" -Force
+    if ($null -eq $pkg.dsh) {
+        $pkg | Add-Member -NotePropertyName 'dsh' -NotePropertyValue ([pscustomobject]@{})
+    }
+    if ($null -eq $pkg.dsh.profile) {
+        $pkg.dsh | Add-Member -NotePropertyName 'profile' -NotePropertyValue ([pscustomobject]@{})
+    }
+    $bundles = @($pkg.dsh.profile.bundles)
+    if ($bundles -notcontains 'dsh-lark-bridge') {
+        $pkg.dsh.profile | Add-Member -NotePropertyName 'bundles' -NotePropertyValue @($bundles + 'dsh-lark-bridge') -Force
+    }
+    $json = $pkg | ConvertTo-Json -Depth 10
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Manifest, $json + [Environment]::NewLine, $utf8NoBom)
 }
 
-$pkg = Get-Content $Manifest -Raw | ConvertFrom-Json
-if ($null -eq $pkg.dependencies) {
-    $pkg | Add-Member -NotePropertyName 'dependencies' -NotePropertyValue ([pscustomobject]@{})
-}
-$pkg.dependencies | Add-Member -NotePropertyName 'dsh-lark-bridge' -NotePropertyValue "link:$ProjectDir" -Force
-$pkg.dependencies | Add-Member -NotePropertyName 'dsh-tool-lark-cli' -NotePropertyValue "link:$LarkToolDir" -Force
-if ($null -eq $pkg.dsh) {
-    $pkg | Add-Member -NotePropertyName 'dsh' -NotePropertyValue ([pscustomobject]@{})
-}
-if ($null -eq $pkg.dsh.profile) {
-    $pkg.dsh | Add-Member -NotePropertyName 'profile' -NotePropertyValue ([pscustomobject]@{})
-}
-$bundles = @($pkg.dsh.profile.bundles)
-if ($bundles -notcontains 'dsh-lark-bridge') {
-    $pkg.dsh.profile | Add-Member -NotePropertyName 'bundles' -NotePropertyValue @($bundles + 'dsh-lark-bridge') -Force
-}
-$json = $pkg | ConvertTo-Json -Depth 10
-$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-[System.IO.File]::WriteAllText($Manifest, $json + [Environment]::NewLine, $utf8NoBom)
-
-# 6b. Hard postcondition: both linked entries and the bundle registry must exist.
+# 4b. Hard postcondition: both linked entries and the bundle registry must exist.
 foreach ($entry in @(
     (Join-Path $Link 'lib\index.js'),
     (Join-Path $LarkToolLink 'lib\index.js')

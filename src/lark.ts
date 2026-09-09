@@ -23,6 +23,7 @@ import { parseCommand, HELP_TEXT } from './commands.js'
 import { domainFor, type ResolvedConfig } from './config.js'
 import { saveOwnerId } from './credentials.js'
 import { DshBinding, type BridgeEvent } from './dsh-binding.js'
+import { createSafeSdkLogger } from './safe-log.js'
 import { splitArgs } from './split-args.js'
 import { resolveWorkspace } from './workspace.js'
 
@@ -111,6 +112,9 @@ export class LarkBridge {
         requireMention: config.requireMention,
         respondToMentionAll: false,
       },
+      // The default Feishu SDK logger prints complete Axios errors, including
+      // request headers. Route all SDK logs through our bounded redactor.
+      logger: createSafeSdkLogger(log),
       respectProxyEnv: true,
     }
     this.channel = createLarkChannel(opts)

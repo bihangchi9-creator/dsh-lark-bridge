@@ -1,4 +1,7 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname } from 'node:path'
+import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { apply, inject } from '../src/index'
@@ -43,6 +46,38 @@ describe('install robustness — complete workspace tier delivery', () => {
       expect(script).toContain('dsh-tool-lark-cli')
       expect(script.replaceAll('\\', '/')).toContain('tools/lark-cli')
       expect(script).toContain('installation incomplete')
+    }
+  })
+
+  it('uses the official dsh plugin manager to initialize a missing profile', () => {
+    const unix = readFileSync(`${root}/scripts/setup.sh`, 'utf8')
+    const windows = readFileSync(`${root}/scripts/setup.ps1`, 'utf8')
+    for (const script of [unix, windows]) {
+      expect(script).toContain('official plugin install')
+      expect(script).toContain('plugin --profile')
+      expect(script).toContain('add "link:')
+    }
+  })
+
+  it('fails before creating partial state when neither dsh nor a profile exists', () => {
+    const home = mkdtempSync(`${tmpdir()}/dsh-lark-setup-empty-`)
+    const dshHome = `${home}/dsh-home`
+    const nodeDir = dirname(process.execPath)
+    try {
+      expect(() =>
+        execFileSync('/bin/bash', [`${root}/scripts/setup.sh`], {
+          env: {
+            HOME: home,
+            DSH_HOME: dshHome,
+            PATH: `${nodeDir}:/usr/bin:/bin`,
+          },
+          encoding: 'utf8',
+          stdio: 'pipe',
+        }),
+      ).toThrow()
+      expect(existsSync(dshHome)).toBe(false)
+    } finally {
+      rmSync(home, { recursive: true, force: true })
     }
   })
 })

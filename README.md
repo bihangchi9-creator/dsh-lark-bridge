@@ -58,10 +58,11 @@ pnpm setup:win        # Windows (scripts/setup.ps1)
 ```
 
 The script preflights your Node version, **builds the plugin (fails loudly if
-the build fails)**, links it into the dsh profile, and **registers it as a
-bundle** (when `dsh` is on PATH it delegates to the official
-`dsh plugin` command internally). After that, launch dsh directly — **no
-`--patch` flag needed**:
+the build fails)**, installs the access-tier presets, and registers both the
+bridge and its `dsh-tool-lark-cli` dependency. When `dsh` is available it uses
+the official `dsh plugin` command, which **initializes a missing `web` or
+`headless` profile automatically** — no preliminary `dsh web` launch is
+needed. After that, launch dsh directly with **no `--patch` flag**:
 
 ```bash
 # macOS / Linux
@@ -71,7 +72,11 @@ DSH_PERMISSION_MODE=danger-full-access dsh web
 $env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 ```
 
-> Different profile: `DSH_PROFILE=headless pnpm setup`; custom dsh home: `DSH_HOME=/path/.dsh pnpm setup` (both env vars work on Windows too).
+> Different profile: `DSH_PROFILE=headless pnpm setup`; custom dsh home:
+> `DSH_HOME=/path/.dsh pnpm setup` (both env vars work on Windows too). If no
+> `dsh` command is available, setup can only use its manual fallback and
+> therefore requires an already-initialized profile; it fails before building
+> or copying presets, so it leaves no partial installation.
 
 ### Option 2: official `dsh plugin` command (build first!)
 
