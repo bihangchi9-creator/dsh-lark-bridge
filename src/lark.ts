@@ -41,11 +41,15 @@ const STREAM_FLUSH_MS = 500
 /** How often the app owner is re-resolved from the app-info API. */
 const OWNER_REFRESH_MS = 30 * 60 * 1000
 
+/** Bound output from the host SSO checker. */
+const MAX_SSO_OUTPUT_CHARS = 64 * 1024
+
 /** Max queued messages per chat while a turn is running (beyond: dropped loudly). */
 const MAX_PENDING_PER_CHAT = 10
 
 /** Conservative per-message length cap; longer replies are split at newlines. */
 const MAX_REPLY_CHARS = 8000
+const MAX_BUFFERED_REPLY_CHARS = MAX_REPLY_CHARS * 20
 
 /** Per-chat model override, chosen via `/model <provider>/<model>`. */
 interface ChatModelRoute {
@@ -217,15 +221,19 @@ export class LarkBridge {
         child.kill('SIGKILL')
         finish(false)
       }, 10_000)
-      child.stdout?.on('data', (chunk: Buffer) => {
-        out += chunk.toString()
-      })
-      child.stderr?.on('data', (chunk: Buffer) => {
-        out += chunk.toString()
-      })
+      const append = (chunk: Buffer): void => {
+        if (out.length >= MAX_SSO_OUTPUT_CHARS) return
+        out += chunk.toString().slice(0, MAX_SSO_OUTPUT_CHARS - out.length)
+      }
+      child.stdout?.on('data', append)
+      child.stderr?.on('data', append)
       child.on('error', () => finish(false))
       child.on('close', code => {
-        finish(code === 0 && marker.length > 0 && out.includes(marker))
+        const exactMarker = marker.trim()
+        const matched = exactMarker.length > 0 && out
+          .split(/\r?\n/)
+          .some(line => line.trim() === exactMarker)
+        finish(code === 0 && matched)
       })
     })
   }
@@ -279,7 +287,7 @@ export class LarkBridge {
       if (!info.ownerId) return
       this.ownerId = info.ownerId
       try {
-        saveOwnerId(info.ownerId)
+        saveOwnerId(info.ownerId, this.config.appId, this.config.appSecret)
       } catch {
         // Persisting is a convenience; the in-memory value is what gates.
       }
@@ -652,7 +660,12 @@ export class LarkBridge {
         throw new Error(`host SSO verification failed for gated preset ${JSON.stringify(presetId)}`)
       }
     }
-    const route: { model?: string; provider?: string; preset?: string } = {}
+    const route: {
+      model?: string
+      provider?: string
+      preset?: string
+      sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access'
+    } = {}
     // Precedence: per-chat `/model` override > per-tier model route
     // (DSH_LARK_PRESET_MODELS, an extra tier -> its provider) > global default.
     if (modelOverride !== undefined) {
@@ -665,7 +678,21 @@ export class LarkBridge {
         route.model = tierModel.model
       }
     }
-    if (presetId !== undefined) route.preset = presetNameFor(presetId, this.config.extraPresets)
+    const effectivePresetId = presetId ?? this.config.accessMode
+    route.sandbox = effectivePresetId === 'read-only'
+      ? 'read-only'
+      : effectivePresetId === 'workspace'
+        ? 'workspace-write'
+        : effectivePresetId === 'full'
+          ? 'danger-full-access'
+          : undefined
+    if (presetId !== undefined) {
+      const preset = presetNameFor(presetId, this.config.extraPresets)
+      if (presetId !== 'full' && preset === undefined) {
+        throw new Error(`configured preset ${JSON.stringify(presetId)} is no longer available; refusing to fall back`)
+      }
+      route.preset = preset
+    }
 
     // Attachments: download images/files into the chat's workspace and hand
     // the paths to the agent (read_image / file reads). Rejections are
@@ -677,6 +704,7 @@ export class LarkBridge {
         msg.messageId,
         msg.resources,
         join(cwd, '.attachments'),
+        this.config.workspaceRoot,
       )
       attachments.push(...result.accepted)
       if (result.rejected.length > 0) {
@@ -693,6 +721,8 @@ export class LarkBridge {
 
     // Buffer streamed text; a periodic flush pushes it to the Feishu card.
     let buffer = ''
+    let bufferedChars = 0
+    let outputTruncated = false
     let done = false
     let doneReason = ''
     let errored: string | undefined
@@ -702,11 +732,24 @@ export class LarkBridge {
       cwd,
       (event: BridgeEvent) => {
         switch (event.type) {
-          case 'text':
-            buffer += event.delta
+          case 'text': {
+            const remaining = MAX_BUFFERED_REPLY_CHARS - bufferedChars
+            if (remaining > 0) {
+              const delta = event.delta.slice(0, remaining)
+              buffer += delta
+              bufferedChars += delta.length
+              if (delta.length < event.delta.length) outputTruncated = true
+            } else {
+              outputTruncated = true
+            }
             break
+          }
           case 'final_text':
-            if (buffer.length === 0) buffer = event.content
+            if (buffer.length === 0) {
+              buffer = event.content.slice(0, MAX_BUFFERED_REPLY_CHARS)
+              bufferedChars = buffer.length
+              if (buffer.length < event.content.length) outputTruncated = true
+            }
             break
           case 'done':
             done = true
@@ -767,7 +810,7 @@ export class LarkBridge {
           const finalText = errored
             ? `⚠️ ${errored}`
             : buffer.length > 0
-              ? buffer
+              ? `${buffer}${outputTruncated ? '\n\n⚠️ 输出超过安全上限，后续内容已截断。' : ''}`
               : '(no output)'
           const chunks = splitLongText(finalText, MAX_REPLY_CHARS)
           const first = chunks[0] ?? ''

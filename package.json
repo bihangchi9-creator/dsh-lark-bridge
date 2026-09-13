@@ -21,6 +21,8 @@
     "lib/**/*.js",
     "lib/**/*.d.ts",
     "cordis.patch.yml",
+    "NOTICE",
+    "SKILL.md",
     "scripts/setup.sh",
     "scripts/setup.ps1",
     "presets/**",
@@ -30,6 +32,7 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tools/lark-cli/tsconfig.json",
+    "prepack": "pnpm run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "tsc -p tsconfig.json --watch",

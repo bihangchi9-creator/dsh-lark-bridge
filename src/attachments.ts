@@ -16,8 +16,8 @@
  * @module lark-agent-bridge/attachments
  */
 
-import { mkdir, readdir, rm, stat } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, lstat, readdir, realpath, rm } from 'node:fs/promises'
+import { isAbsolute, join, relative } from 'node:path'
 
 /** Max attachments accepted from one message. */
 export const MAX_ATTACHMENTS_PER_MESSAGE = 5
@@ -82,6 +82,7 @@ export async function downloadAttachments(
   messageId: string,
   resources: AttachmentResource[],
   dir: string,
+  workspaceRoot = dir,
 ): Promise<AttachmentResult> {
   const accepted: DownloadedAttachment[] = []
   const rejected: Array<{ fileName?: string; reason: string }> = []
@@ -97,12 +98,22 @@ export async function downloadAttachments(
     })
   }
 
-  await mkdir(dir, { recursive: true }).catch(() => {})
-  await sweepStaleAttachments(dir)
+  const safeRoot = await prepareAttachmentRoot(dir, workspaceRoot)
+  if (!safeRoot) {
+    return {
+      accepted,
+      rejected: [{ reason: '附件目录不安全（可能是符号链接），已拒绝写入' }],
+    }
+  }
+  await sweepStaleAttachments(safeRoot)
   // Isolate each message so same-named files from later messages cannot
   // overwrite an earlier attachment the conversation may still reference.
-  const messageDir = join(dir, safeAttachmentName(messageId, `message-${Date.now()}`))
-  await mkdir(messageDir, { recursive: true }).catch(() => {})
+  const messageDir = join(safeRoot, safeAttachmentName(messageId, `message-${Date.now()}`))
+  try {
+    await mkdir(messageDir, { recursive: false, mode: 0o700 })
+  } catch {
+    return { accepted, rejected: [{ reason: '无法创建隔离的附件目录' }] }
+  }
 
   for (let i = 0; i < selected.length; i++) {
     const res = selected[i]!
@@ -137,14 +148,44 @@ export async function downloadAttachments(
   return { accepted, rejected }
 }
 
-/** Best-effort sweep of attachment files older than the TTL. */
+/** Create and verify a real directory root, refusing any symlink component at the leaf. */
+async function prepareAttachmentRoot(dir: string, workspaceRoot: string): Promise<string | undefined> {
+  try {
+    // The workspace must already exist and resolve beneath the configured root.
+    // This anchors containment even when a parent of `.attachments` is swapped
+    // for a symlink by a workspace-write agent.
+    const configuredRoot = await realpath(workspaceRoot)
+    const existing = await lstat(dir).catch(() => undefined)
+    if (existing?.isSymbolicLink()) return undefined
+    await mkdir(dir, { recursive: true, mode: 0o700 })
+    const info = await lstat(dir)
+    if (!info.isDirectory() || info.isSymbolicLink()) return undefined
+    const resolved = await realpath(dir)
+    return isInside(configuredRoot, resolved) ? resolved : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function isInside(root: string, candidate: string): boolean {
+  const rel = relative(root, candidate)
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel))
+}
+
+/** Best-effort sweep of attachment files older than the TTL without following symlinks. */
 async function sweepStaleAttachments(dir: string): Promise<void> {
   try {
+    const root = await realpath(dir)
     const now = Date.now()
-    for (const entry of await readdir(dir)) {
-      const p = join(dir, entry)
+    for (const entry of await readdir(root)) {
+      const p = join(root, entry)
+      if (!isInside(root, p)) continue
       try {
-        const info = await stat(p)
+        const info = await lstat(p)
+        if (info.isSymbolicLink()) {
+          if (now - info.mtimeMs > ATTACHMENT_TTL_MS) await rm(p, { force: true })
+          continue
+        }
         if (now - info.mtimeMs > ATTACHMENT_TTL_MS) {
           await rm(p, { force: true, recursive: info.isDirectory() })
         }

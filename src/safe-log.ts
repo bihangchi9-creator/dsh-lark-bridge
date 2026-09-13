@@ -21,7 +21,7 @@ const MAX_STRING = 2000
 export function redactLogText(value: string): string {
   return value
     .replace(
-      /\b(authorization|cookie|set-cookie|app[_-]?secret|api[_-]?key|access[_-]?token|refresh[_-]?token)\b(\s*[:=]\s*)((?:Bearer|Basic)\s+)?[^\s,;]+/gi,
+      /\b(authorization|cookie|set-cookie|app[_-]?secret|client[_-]?secret|api[_-]?key|access[_-]?token|refresh[_-]?token|tenant[_-]?access[_-]?token)\b(\s*[:=]\s*)((?:Bearer|Basic)\s+)?[^\s,;]+/gi,
       '$1$2[REDACTED]',
     )
     .replace(/\b(Bearer|Basic)\s+[^\s,;"']+/gi, '$1 [REDACTED]')

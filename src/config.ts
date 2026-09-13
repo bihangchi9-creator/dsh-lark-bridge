@@ -167,6 +167,13 @@ export function tryResolveConfig(config: LarkBridgeConfig): ResolvedConfig | und
   if (!appId || !appSecret) return undefined
   const tenant = (config.tenant ?? env.LARK_TENANT ?? saved?.tenant ?? 'feishu') as LarkTenant
   const home = env.HOME ?? env.USERPROFILE ?? process.cwd()
+  const configuredIdentity = config.appId !== undefined || config.appSecret !== undefined
+  const envIdentity = env.LARK_APP_ID !== undefined || env.LARK_APP_SECRET !== undefined
+  // A saved owner belongs to the saved app identity. Never carry that trust
+  // across an inline/env credential override for a different app.
+  const ownerId = configuredIdentity || envIdentity
+    ? saved?.appId === appId && saved?.appSecret === appSecret ? saved.ownerId : undefined
+    : saved?.ownerId
   return {
     appId,
     appSecret,
@@ -181,7 +188,7 @@ export function tryResolveConfig(config: LarkBridgeConfig): ResolvedConfig | und
       config.turnTimeoutMs ?? env.DSH_LARK_TURN_TIMEOUT_MS,
       10 * 60 * 1000,
     ),
-    ownerId: saved?.ownerId,
+    ownerId,
     // NOTE: schemastery materializes empty arrays/objects for absent list/dict
     // fields (e.g. `[]` for Schema.array, `{}` for Schema.dict), so a bare
     // `?? env` fallback is defeated by the empty default. Use emptiness-aware
@@ -258,7 +265,7 @@ function envList(value: string | undefined): string[] {
 /**
  * Merge the validated plugin config with environment and saved-credential
  * fallbacks. Precedence for the Feishu secrets: inline config → environment
- * variables → the file written by the `dsh-lark-register` wizard. Throws a
+ * variables → the file written by the `lark-agent-register` wizard. Throws a
  * clear error if none supply them, so the failure surfaces at boot rather than
  * on the first inbound message.
  */
@@ -266,7 +273,7 @@ export function resolveConfig(config: LarkBridgeConfig): ResolvedConfig {
   const resolved = tryResolveConfig(config)
   if (resolved === undefined) {
     throw new Error(
-      'lark-agent-bridge: missing Feishu credentials. Run the `dsh-lark-register` wizard ' +
+      'lark-agent-bridge: missing Feishu credentials. Run the `lark-agent-register` wizard ' +
         'to create an app by QR, or set LARK_APP_ID and LARK_APP_SECRET ' +
         '(or appId/appSecret in the plugin config).',
     )

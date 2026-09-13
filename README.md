@@ -47,7 +47,7 @@ LARK_BRIDGE_IDE_SOCKET=/tmp/ide.sock node lib/daemon.js
 LARK_BRIDGE_CUSTOM_ADAPTER=./examples/custom-adapter.mjs node lib/daemon.js
 ```
 
-CLI **spawns** the binary. IDE **attaches** a Unix-socket JSONL sidecar (window closed ⇒ that line dies). Custom loads an `AgentAdapter` module (see `examples/custom-adapter.mjs`). One group is still one conversation pinned with `/agent`; a dead line is not retargeted.
+CLI **spawns** the binary. IDE **attaches** a Unix-socket JSONL sidecar owned by the current user and not writable by group/others (`chmod 600 /path/to.sock`; window closed ⇒ that line dies). Custom loads an `AgentAdapter` module (see `examples/custom-adapter.mjs`). One group is still one conversation pinned with `/agent`; a dead line is not retargeted.
 
 ByteDance-only overlay (SSO, bytecli, extra presets) lives in a local `internal/` directory that is gitignored. Do not publish it to this GitHub repo; ship it through the internal skill marketplace.
 
@@ -181,7 +181,7 @@ On the first launch with no credentials, the plugin prints a **QR code** in the 
 Prefer to do it manually / re-register / switch accounts? Run the standalone wizard:
 
 ```bash
-pnpm register           # or: npx dsh-lark-register
+pnpm register           # or: npx lark-agent-register
 ```
 
 Already have credentials? Skip the wizard entirely by exporting them:

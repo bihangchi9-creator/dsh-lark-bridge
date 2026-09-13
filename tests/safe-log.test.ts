@@ -10,11 +10,13 @@ describe('safe logging', () => {
   it('redacts credential-shaped strings', () => {
     const text =
       'Authorization: Bearer tenant-secret Cookie=session-secret ' +
-      'app_secret=app-secret access_token=access-secret'
+      'app_secret=app-secret client_secret=client-secret access_token=access-secret ' +
+      'tenant_access_token=tenant-secret'
     const redacted = redactLogText(text)
     expect(redacted).not.toContain('tenant-secret')
     expect(redacted).not.toContain('session-secret')
     expect(redacted).not.toContain('app-secret')
+    expect(redacted).not.toContain('client-secret')
     expect(redacted).not.toContain('access-secret')
     expect(redacted).toContain('[REDACTED]')
   })

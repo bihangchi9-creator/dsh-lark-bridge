@@ -8,7 +8,7 @@
  * Two entry points share this one flow:
  *   - the plugin itself, which runs it automatically at boot when no
  *     credentials are configured yet (see index.ts), and
- *   - the standalone `dsh-lark-register` bin (see register-cli.ts), a manual
+ *   - the standalone `lark-agent-register` bin (see register-cli.ts), a manual
  *     fallback for re-registering or switching accounts.
  *
  * It depends only on `@larksuite/channel` + `qrcode-terminal`, so it works

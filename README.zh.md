@@ -47,7 +47,7 @@ LARK_BRIDGE_IDE_SOCKET=/tmp/ide.sock node lib/daemon.js
 LARK_BRIDGE_CUSTOM_ADAPTER=./examples/custom-adapter.mjs node lib/daemon.js
 ```
 
-CLI **spawn** 二进制；IDE **attach** Unix socket 上的 JSONL sidecar（窗口关了这条线断）；自研加载 `AgentAdapter` 模块（见 `examples/custom-adapter.mjs`）。一个群仍然是一段对话，`/agent` 钉死，断线不改绑。
+CLI **spawn** 二进制；IDE **attach** 当前用户拥有且组/其他用户不可写的 Unix socket JSONL sidecar（`chmod 600 /path/to.sock`；窗口关了这条线断）；自研加载 `AgentAdapter` 模块（见 `examples/custom-adapter.mjs`）。一个群仍然是一段对话，`/agent` 钉死，断线不改绑。
 
 字节内部 overlay（SSO / bytecli / 扩展档位）在本地 `internal/`，已被 gitignore。不要推到这个 GitHub 仓库，走内部 skill 市场发布。
 
@@ -163,7 +163,7 @@ DSH_PERMISSION_MODE=danger-full-access dsh web
 想手动做 / 重新注册 / 换账号？跑独立向导：
 
 ```bash
-pnpm register           # 或: npx dsh-lark-register
+pnpm register           # 或: npx lark-agent-register
 ```
 
 已经有凭证了？直接用环境变量跳过向导：

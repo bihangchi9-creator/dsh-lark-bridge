@@ -13,9 +13,8 @@
  * @module lark-agent-bridge/ide-adapter
  */
 
-import { accessSync, constants } from 'node:fs'
+import { lstatSync } from 'node:fs'
 import { createConnection, type Socket } from 'node:net'
-import { createInterface } from 'node:readline'
 import type { AgentAdapter, AdapterRoute, BridgeEvent, BridgeSession } from './adapter.js'
 import type { RuntimeDescriptor } from './runtime.js'
 
@@ -41,6 +40,8 @@ interface LiveSession {
 }
 
 const EVENT_TYPES = new Set(['text', 'thinking', 'final_text', 'tool_use', 'tool_result', 'done', 'error'])
+const MAX_IDE_JSONL_LINE_BYTES = 1024 * 1024
+const MAX_EVENT_TEXT_CHARS = 256 * 1024
 
 export class IdeAttachAdapter implements AgentAdapter {
   readonly id: string
@@ -61,7 +62,12 @@ export class IdeAttachAdapter implements AgentAdapter {
   async isAvailable(): Promise<boolean> {
     if (!this.socketPath) return false
     try {
-      accessSync(this.socketPath, constants.R_OK)
+      const info = lstatSync(this.socketPath)
+      if (!info.isSocket() || info.isSymbolicLink()) return false
+      if (typeof process.getuid === 'function' && info.uid !== process.getuid()) return false
+      // Group/other writable sockets allow unrelated local users to impersonate
+      // the IDE sidecar. Require owner-only write access.
+      if ((info.mode & 0o022) !== 0) return false
       return true
     } catch {
       return false
@@ -112,7 +118,9 @@ export class IdeAttachAdapter implements AgentAdapter {
   private async runTurn(chatId: string, text: string): Promise<void> {
     const session = this.sessions.get(chatId)
     if (!session) return
-    if (!(await this.isAvailable()) || !this.socketPath) {
+    const available = await this.isAvailable()
+    if (this.sessions.get(chatId) !== session) return
+    if (!available || !this.socketPath) {
       session.onEvent({
         type: 'error',
         message: `${this.displayName} window is down; this line is not retargeted`,
@@ -151,24 +159,46 @@ export class IdeAttachAdapter implements AgentAdapter {
       }
     })
 
-    const rl = createInterface({ input: socket })
-    rl.on('line', line => {
-      const trimmed = line.trim()
-      if (!trimmed) return
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(trimmed)
-      } catch {
+    let buffer = ''
+    socket.on('data', chunk => {
+      if (terminal) return
+      buffer += chunk.toString('utf8')
+      if (Buffer.byteLength(buffer) > MAX_IDE_JSONL_LINE_BYTES && !buffer.includes('\n')) {
+        finish([
+          { type: 'error', message: 'IDE sidecar emitted an oversized JSONL line' },
+          { type: 'done', reason: 'failed' },
+        ])
         return
       }
-      const event = asBridgeEvent(parsed)
-      if (!event) return
-      session.onEvent(event)
-      if (event.type === 'done' || event.type === 'error') {
-        if (event.type === 'error') session.onEvent({ type: 'done', reason: 'failed' })
-        terminal = true
-        session.socket = undefined
-        socket.destroy()
+      for (;;) {
+        const newline = buffer.indexOf('\n')
+        if (newline < 0) break
+        const trimmed = buffer.slice(0, newline).trim()
+        buffer = buffer.slice(newline + 1)
+        if (!trimmed) continue
+        if (Buffer.byteLength(trimmed) > MAX_IDE_JSONL_LINE_BYTES) {
+          finish([
+            { type: 'error', message: 'IDE sidecar emitted an oversized JSONL line' },
+            { type: 'done', reason: 'failed' },
+          ])
+          return
+        }
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(trimmed)
+        } catch {
+          continue
+        }
+        const event = asBridgeEvent(parsed)
+        if (!event) continue
+        session.onEvent(event)
+        if (event.type === 'done' || event.type === 'error') {
+          if (event.type === 'error') session.onEvent({ type: 'done', reason: 'failed' })
+          terminal = true
+          session.socket = undefined
+          socket.destroy()
+          return
+        }
       }
     })
 
@@ -180,5 +210,10 @@ function asBridgeEvent(value: unknown): BridgeEvent | undefined {
   if (typeof value !== 'object' || value === null) return undefined
   const type = (value as { type?: unknown }).type
   if (typeof type !== 'string' || !EVENT_TYPES.has(type)) return undefined
+  const event = value as Record<string, unknown>
+  for (const key of ['delta', 'content', 'message', 'name', 'reason']) {
+    const field = event[key]
+    if (typeof field === 'string' && field.length > MAX_EVENT_TEXT_CHARS) return undefined
+  }
   return value as BridgeEvent
 }

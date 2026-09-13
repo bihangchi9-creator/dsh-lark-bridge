@@ -3,11 +3,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildCodexExecArgs,
   CliSpawnAdapter,
   resolveExecutablePath,
+  sanitizeChildEnv,
+  sandboxForPreset,
   TRAEX_RUNTIME,
 } from '../src/cli-adapter'
 import type { BridgeEvent } from '../src/dsh-binding'
@@ -67,6 +69,33 @@ describe('buildCodexExecArgs', () => {
   })
 })
 
+describe('CLI security policy', () => {
+  it('strips bridge and credential-shaped environment variables from children', () => {
+    const env = sanitizeChildEnv({
+      PATH: '/usr/bin',
+      HOME: '/tmp/home',
+      LANG: 'en_US.UTF-8',
+      LARK_APP_SECRET: 'must-not-leak',
+      OPENAI_API_KEY: 'agent-auth-is-required',
+      CUSTOM_TOKEN_VALUE: 'must-not-leak',
+      SAFE_FLAG: 'also-not-forwarded',
+    })
+    expect(env).toEqual({
+      PATH: '/usr/bin',
+      HOME: '/tmp/home',
+      LANG: 'en_US.UTF-8',
+      OPENAI_API_KEY: 'agent-auth-is-required',
+    })
+  })
+
+  it('maps only enforceable public presets and rejects unknown presets', () => {
+    expect(sandboxForPreset('lark-readonly', 'workspace-write')).toBe('read-only')
+    expect(sandboxForPreset('lark-workspace', 'read-only')).toBe('workspace-write')
+    expect(sandboxForPreset(undefined, 'workspace-write')).toBe('workspace-write')
+    expect(() => sandboxForPreset('bytedance', 'workspace-write')).toThrow(/cannot enforce preset/)
+  })
+})
+
 describe('resolveExecutablePath', () => {
   it('finds a file on PATH', () => {
     const dir = tmp()
@@ -81,6 +110,27 @@ describe('resolveExecutablePath', () => {
 })
 
 describe('CliSpawnAdapter', () => {
+  it('does not spawn if disposed while availability is still resolving', async () => {
+    const dir = tmp()
+    let spawned = false
+    const adapter = new CliSpawnAdapter({
+      id: 'codex', displayName: 'Codex CLI', binary: 'codex', env: { PATH: dir },
+      catalogPath: join(dir, 'catalog.json'), threadsPath: join(dir, 'threads.json'),
+      spawnFn: (() => { spawned = true; return new FakeChild() as never }) as never,
+    })
+    let release: ((value: boolean) => void) | undefined
+    vi.spyOn(adapter, 'isAvailable').mockImplementation(() => new Promise(resolve => { release = resolve }))
+    const events: BridgeEvent[] = []
+    const session = await adapter.ensureSession('oc_race', dir, event => events.push(event))
+    session.send('race')
+    await new Promise<void>(resolve => setImmediate(resolve))
+    await adapter.dispose('oc_race')
+    release?.(true)
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(spawned).toBe(false)
+    expect(events).toEqual([])
+  })
+
   it('is unavailable when the binary is missing', async () => {
     const dir = tmp()
     const adapter = new CliSpawnAdapter({
@@ -123,6 +173,7 @@ describe('CliSpawnAdapter', () => {
     expect(spawned?.command).toBe('traex')
     expect(spawned?.args[0]).toBe('exec')
     expect(spawned?.args).toContain('--json')
+    expect(spawned?.args).toContain('workspace-write')
 
     children[0]!.stdout.write(`${JSON.stringify({ type: 'thread.started', thread_id: 'thr_live' })}\n`)
     children[0]!.stdout.write(`${JSON.stringify({ type: 'agent_message', message: 'pong' })}\n`)
@@ -140,6 +191,87 @@ describe('CliSpawnAdapter', () => {
     expect(spawned?.args).toContain('resume')
     expect(spawned?.args).toContain('thr_live')
     children[1]!.kill()
+  })
+
+  it('applies route sandbox and model to the spawned CLI', async () => {
+    const dir = tmp()
+    const bin = join(dir, 'codex')
+    writeFileSync(bin, '#!/bin/sh\n', { mode: 0o755 })
+    let spawned: { args: string[]; env?: NodeJS.ProcessEnv } | undefined
+    let child: FakeChild | undefined
+    const adapter = new CliSpawnAdapter({
+      id: 'codex',
+      displayName: 'Codex CLI',
+      binary: 'codex',
+      env: { PATH: dir, HOME: dir, LARK_APP_SECRET: 'secret' },
+      catalogPath: join(dir, 'catalog.json'),
+      threadsPath: join(dir, 'threads.json'),
+      spawnFn: ((_command, args, options) => {
+        spawned = { args: args as string[], env: options?.env as NodeJS.ProcessEnv }
+        child = new FakeChild()
+        return child as never
+      }) as never,
+    })
+    const session = await adapter.ensureSession('oc_route', dir, () => {}, {
+      preset: 'lark-readonly',
+      sandbox: 'read-only',
+      model: 'gpt-test',
+    })
+    session.send('inspect')
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(spawned?.args).toContain('read-only')
+    expect(spawned?.args).toContain('--model')
+    expect(spawned?.args).toContain('gpt-test')
+    expect(spawned?.env?.LARK_APP_SECRET).toBeUndefined()
+    child!.kill()
+  })
+
+  it('fails closed when a custom preset has no enforceable CLI sandbox', async () => {
+    const dir = tmp()
+    const bin = join(dir, 'codex')
+    writeFileSync(bin, '#!/bin/sh\n', { mode: 0o755 })
+    let spawned = false
+    const adapter = new CliSpawnAdapter({
+      id: 'codex', displayName: 'Codex CLI', binary: 'codex', env: { PATH: dir },
+      catalogPath: join(dir, 'catalog.json'), threadsPath: join(dir, 'threads.json'),
+      spawnFn: (() => { spawned = true; return new FakeChild() as never }) as never,
+    })
+    const events: BridgeEvent[] = []
+    const session = await adapter.ensureSession('oc_custom', dir, event => events.push(event), {
+      preset: 'internal-privileged',
+    })
+    session.send('must not run')
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(spawned).toBe(false)
+    expect(events.some(event => event.type === 'error' && event.message.includes('cannot enforce preset'))).toBe(true)
+  })
+
+  it('treats a nonzero child exit as failure', async () => {
+    const dir = tmp()
+    const bin = join(dir, 'codex')
+    writeFileSync(bin, '#!/bin/sh\n', { mode: 0o755 })
+    let child: FakeChild | undefined
+    const adapter = new CliSpawnAdapter({
+      id: 'codex',
+      displayName: 'Codex CLI',
+      binary: 'codex',
+      env: { PATH: dir },
+      catalogPath: join(dir, 'catalog.json'),
+      threadsPath: join(dir, 'threads.json'),
+      spawnFn: (() => {
+        child = new FakeChild()
+        return child as never
+      }) as never,
+    })
+    const events: BridgeEvent[] = []
+    const session = await adapter.ensureSession('oc_fail', dir, event => events.push(event))
+    session.send('fail')
+    await new Promise<void>(resolve => setImmediate(resolve))
+    child!.exitCode = 7
+    child!.emit('close', 7, null)
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(events.some(event => event.type === 'error')).toBe(true)
+    expect(events.some(event => event.type === 'done' && event.reason === 'completed')).toBe(false)
   })
 
   it('reset drops the thread so the next turn is not a resume', async () => {

@@ -22,6 +22,8 @@ export interface AdapterRoute {
   provider?: string
   model?: string
   preset?: string
+  /** Enforceable filesystem/process sandbox for out-of-process runtimes. */
+  sandbox?: 'read-only' | 'workspace-write' | 'danger-full-access'
 }
 
 /**

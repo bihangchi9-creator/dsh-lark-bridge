@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 /**
  * Standalone Feishu gateway for CLI / IDE / custom runtimes.
  *
@@ -115,9 +116,30 @@ function isMainModule(): boolean {
 }
 
 if (isMainModule()) {
-  startDaemon().catch(err => {
-    // eslint-disable-next-line no-console
-    console.error('[lark-agent-bridge] daemon failed', err instanceof Error ? err.message : err)
-    process.exitCode = 1
-  })
+  let bridge: LarkBridge | undefined
+  let stopping = false
+  const stop = (signal: string): void => {
+    if (stopping) return
+    stopping = true
+    process.exitCode = signal === 'SIGTERM' || signal === 'SIGINT' ? 0 : 1
+    if (bridge) {
+      void bridge.disconnect().catch(err =>
+        console.error('[lark-agent-bridge] shutdown failed', err instanceof Error ? err.message : err),
+      )
+    }
+  }
+  process.once('SIGINT', () => stop('SIGINT'))
+  process.once('SIGTERM', () => stop('SIGTERM'))
+  startDaemon()
+    .then(value => {
+      bridge = value
+      if (stopping) void value.disconnect().catch(err =>
+        console.error('[lark-agent-bridge] shutdown failed', err instanceof Error ? err.message : err),
+      )
+    })
+    .catch(err => {
+      // eslint-disable-next-line no-console
+      console.error('[lark-agent-bridge] daemon failed', err instanceof Error ? err.message : err)
+      process.exitCode = 1
+    })
 }

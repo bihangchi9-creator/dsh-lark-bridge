@@ -1,8 +1,8 @@
 import { createServer, type Server } from 'node:net'
-import { mkdtempSync, rmSync, unlinkSync } from 'node:fs'
+import { chmodSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { IdeAttachAdapter } from '../src/ide-adapter'
 import type { BridgeEvent } from '../src/dsh-binding'
 
@@ -42,6 +42,25 @@ async function listen(
 }
 
 describe('IdeAttachAdapter', () => {
+  it('does not connect if disposed while availability is resolving', async () => {
+    let connected = false
+    const adapter = new IdeAttachAdapter({
+      socketPath: '/tmp/deferred.sock',
+      connect: (() => { connected = true; throw new Error('must not connect') }) as never,
+    })
+    let release: ((value: boolean) => void) | undefined
+    vi.spyOn(adapter, 'isAvailable').mockImplementation(() => new Promise(resolve => { release = resolve }))
+    const events: BridgeEvent[] = []
+    const session = await adapter.ensureSession('oc_race', '/tmp', event => events.push(event))
+    session.send('race')
+    await new Promise<void>(resolve => setImmediate(resolve))
+    await adapter.dispose('oc_race')
+    release?.(true)
+    await new Promise<void>(resolve => setImmediate(resolve))
+    expect(connected).toBe(false)
+    expect(events).toEqual([])
+  })
+
   it('is down when no socket exists — window closed', async () => {
     const adapter = new IdeAttachAdapter({ socketPath: '/tmp/definitely-missing-ide.sock' })
     await expect(adapter.isAvailable()).resolves.toBe(false)
@@ -51,6 +70,15 @@ describe('IdeAttachAdapter', () => {
     await new Promise<void>(resolve => setImmediate(resolve))
     expect(events.some(event => event.type === 'error')).toBe(true)
     expect(events.some(event => event.type === 'done')).toBe(true)
+  })
+
+  it('rejects a group/world-writable sidecar socket', async () => {
+    const dir = tmpDir()
+    const socketPath = join(dir, 'insecure.sock')
+    await listen(socketPath, () => {})
+    chmodSync(socketPath, 0o666)
+    const adapter = new IdeAttachAdapter({ socketPath })
+    await expect(adapter.isAvailable()).resolves.toBe(false)
   })
 
   it('streams BridgeEvent lines from a live sidecar', async () => {

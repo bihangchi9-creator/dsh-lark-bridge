@@ -8,8 +8,8 @@
  * @module lark-agent-bridge/workspace
  */
 
-import { mkdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { lstat, mkdir, realpath } from 'node:fs/promises'
+import { isAbsolute, join, relative } from 'node:path'
 
 /** Sanitize a Feishu chat id into a filesystem-safe folder name. */
 function safeName(chatId: string): string {
@@ -23,7 +23,16 @@ function safeName(chatId: string): string {
  * `<workspaceRoot>/<safe chatId>`.
  */
 export async function resolveWorkspace(workspaceRoot: string, chatId: string): Promise<string> {
-  const dir = join(workspaceRoot, safeName(chatId))
+  await mkdir(workspaceRoot, { recursive: true })
+  const root = await realpath(workspaceRoot)
+  const dir = join(root, safeName(chatId))
+  const existing = await lstat(dir).catch(() => undefined)
+  if (existing?.isSymbolicLink()) throw new Error('chat workspace may not be a symbolic link')
   await mkdir(dir, { recursive: true })
-  return dir
+  const resolved = await realpath(dir)
+  const rel = relative(root, resolved)
+  if (rel.startsWith('..') || rel === '..' || isAbsolute(rel)) {
+    throw new Error('chat workspace escapes configured workspace root')
+  }
+  return resolved
 }

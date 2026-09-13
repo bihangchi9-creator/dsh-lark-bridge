@@ -2,7 +2,7 @@
 name: lark-bridge
 description: >-
   Bridge a local coding agent to Feishu/Lark group chats. Use when the user
-  wants Feishu/Lark messages to drive dsh, a CLI agent (traex/claude/codex),
+  wants Feishu/Lark messages to drive dsh, a CLI agent (traex/codex),
   an IDE window (Doubao/TRAE/Codex/Claude Code), or a custom agent. One group
   is one conversation pinned to one runtime. Multiple runtimes may be
   installed; they never silently replace each other.
@@ -28,7 +28,7 @@ This skill ships:
 | Class | Examples | How Feishu is bridged |
 |---|---|---|
 | **dsh** | DeepSeek Harness | Cordis **plugin** inside the dsh process (this repo today) |
-| **CLI** | `traex`, `claude`, `codex` | Separate gateway process **spawns** that binary (trae-to-lark shape) |
+| **CLI** | `traex`, `codex` | Separate gateway process **spawns** that binary (trae-to-lark shape) |
 | **IDE** | Doubao, TRAE, Codex app, Claude Code | Separate gateway **attaches** that window. Closing the window **breaks this line**; that is expected |
 | **custom** | in-house agent | Same adapter contract (spawn or attach) |
 

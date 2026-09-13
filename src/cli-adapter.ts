@@ -11,7 +11,6 @@
 
 import { accessSync, constants, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { delimiter, dirname, isAbsolute, join } from 'node:path'
-import { createInterface } from 'node:readline'
 import type { ChildProcess } from 'node:child_process'
 import spawn from 'cross-spawn'
 import type { AgentAdapter, AdapterRoute, BridgeEvent, BridgeSession } from './adapter.js'
@@ -68,9 +67,37 @@ interface ThreadFile {
 interface LiveSession {
   sessionId: string
   cwd: string
+  route?: AdapterRoute
   threadId?: string
   child?: ChildProcess
   onEvent: (event: BridgeEvent) => void
+}
+
+const MAX_JSONL_LINE_BYTES = 1024 * 1024
+const MAX_STDERR_BYTES = 64 * 1024
+const CLI_SECRET_KEY = /(?:^|_)(?:APP_SECRET|SECRET|TOKEN|PASSWORD|CREDENTIAL|COOKIE|AUTHORIZATION|API_KEY)(?:_|$)/i
+const CLI_ENV_ALLOW = new Set([
+  'HOME', 'USER', 'LOGNAME', 'SHELL', 'PATH', 'PATHEXT', 'TMPDIR', 'TMP', 'TEMP',
+  'LANG', 'LC_ALL', 'LC_CTYPE', 'TERM', 'COLORTERM', 'NO_COLOR',
+  'HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'NO_PROXY',
+  'SSL_CERT_FILE', 'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS',
+  'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME',
+  'CODEX_HOME', 'CLAUDE_CONFIG_DIR',
+  // Target-agent authentication only. Bridge/Lark/internal credentials remain denied.
+  'OPENAI_API_KEY', 'ANTHROPIC_API_KEY',
+])
+
+/** Build the minimal environment a spawned agent needs without leaking host secrets. */
+export function sanitizeChildEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (value === undefined) continue
+    // Explicit agent-auth variables are allowed; all other credential-shaped
+    // names (including LARK_APP_SECRET) remain denied.
+    if (CLI_ENV_ALLOW.has(key) || key.startsWith('LC_')) out[key] = value
+    else if (CLI_SECRET_KEY.test(key)) continue
+  }
+  return out
 }
 
 /** Codex-family CLI adapter: spawn `exec --json`, resume by thread id. */
@@ -94,7 +121,7 @@ export class CliSpawnAdapter implements AgentAdapter {
     this.id = opts.id
     this.displayName = opts.displayName
     this.binary = opts.binary
-    this.sandbox = opts.sandbox ?? 'danger-full-access'
+    this.sandbox = opts.sandbox ?? 'workspace-write'
     this.spawnFn = opts.spawnFn ?? spawn
     this.env = opts.env ?? process.env
     this.pathExt = opts.pathExt ?? this.env.PATHEXT ?? ''
@@ -117,6 +144,7 @@ export class CliSpawnAdapter implements AgentAdapter {
     if (existing) {
       existing.onEvent = onEvent
       existing.cwd = cwd
+      existing.route = routeOverride
       return this.toHandle(chatId, existing)
     }
 
@@ -134,6 +162,7 @@ export class CliSpawnAdapter implements AgentAdapter {
     const session: LiveSession = {
       sessionId,
       cwd,
+      route: routeOverride,
       threadId: fingerprint === entry?.fingerprint ? this.threads.get(chatId) : undefined,
       onEvent,
     }
@@ -144,8 +173,10 @@ export class CliSpawnAdapter implements AgentAdapter {
   async dispose(chatId: string): Promise<void> {
     const session = this.sessions.get(chatId)
     if (!session) return
-    await killChild(session.child)
+    // Remove ownership before killing so a late close handler cannot re-persist
+    // a thread that reset/dispose deliberately erased.
     this.sessions.delete(chatId)
+    await killChild(session.child)
   }
 
   async reset(chatId: string): Promise<void> {
@@ -165,7 +196,11 @@ export class CliSpawnAdapter implements AgentAdapter {
     return {
       sessionId: session.sessionId,
       send: (text: string) => {
-        void this.runTurn(chatId, session, text)
+        void this.runTurn(chatId, session, text).catch(err => {
+          const message = err instanceof Error ? err.message : String(err)
+          session.onEvent({ type: 'error', message })
+          session.onEvent({ type: 'done', reason: 'failed' })
+        })
       },
       dispose: () => this.dispose(chatId),
     }
@@ -177,19 +212,22 @@ export class CliSpawnAdapter implements AgentAdapter {
       return
     }
     const available = await this.isAvailable()
+    if (this.sessions.get(chatId) !== session) return
     if (!available) {
       session.onEvent({ type: 'error', message: `${this.displayName} is not available (${this.binary})` })
       session.onEvent({ type: 'done', reason: 'failed' })
       return
     }
+    const sandbox = session.route?.sandbox ?? sandboxForPreset(session.route?.preset, this.sandbox)
     const args = buildCodexExecArgs({
       cwd: session.cwd,
-      sandbox: this.sandbox,
+      sandbox,
       threadId: session.threadId,
+      model: session.route?.model,
     })
     const child = this.spawnFn(this.binary, args, {
       cwd: session.cwd,
-      env: this.env,
+      env: sanitizeChildEnv(this.env),
       stdio: ['pipe', 'pipe', 'pipe'],
     })
     session.child = child
@@ -201,30 +239,46 @@ export class CliSpawnAdapter implements AgentAdapter {
     }
 
     if (child.stdout) {
-      const rl = createInterface({ input: child.stdout })
-      rl.on('line', line => {
-        const trimmed = line.trim()
-        if (!trimmed) return
-        try {
-          emit(translator.translate(JSON.parse(trimmed)))
-        } catch {
-          // Non-JSON stdout is ignored; the translator still finishes on close.
-        }
-      })
+      consumeBoundedJsonl(
+        child.stdout,
+        line => {
+          try {
+            emit(translator.translate(JSON.parse(line)))
+          } catch {
+            // Non-JSON stdout is ignored; a missing terminal event still fails on close.
+          }
+        },
+        err => {
+          emit(translator.finish('failed'))
+          session.onEvent({ type: 'error', message: err.message })
+          void killChild(child)
+        },
+      )
     }
+    let stderr = ''
+    child.stderr?.on('data', chunk => {
+      if (stderr.length < MAX_STDERR_BYTES) {
+        stderr += chunk.toString('utf8').slice(0, MAX_STDERR_BYTES - stderr.length)
+      }
+    })
 
     child.on('error', err => {
       emit(translator.finish('failed'))
       session.onEvent({ type: 'error', message: err.message })
     })
-    child.on('close', () => {
+    child.on('close', (code, signal) => {
       session.child = undefined
-      if (translator.threadId) {
+      const stillOwned = this.sessions.get(chatId) === session
+      if (stillOwned && translator.threadId) {
         session.threadId = translator.threadId
         this.threads.set(chatId, translator.threadId)
         this.persistThreads()
       }
-      emit(translator.finish('completed'))
+      const cleanExit = code === 0 && signal === null
+      emit(translator.finish(cleanExit ? 'completed' : 'failed'))
+      if (!cleanExit && stderr.trim().length > 0) {
+        session.onEvent({ type: 'error', message: `${this.displayName} exited unsuccessfully` })
+      }
     })
 
     child.stdin?.on('error', err => {
@@ -258,6 +312,17 @@ export class CliSpawnAdapter implements AgentAdapter {
   }
 }
 
+/** Map bridge preset names onto Codex-family sandbox modes. Unknown presets fail closed. */
+export function sandboxForPreset(
+  preset: string | undefined,
+  fallback: 'read-only' | 'workspace-write' | 'danger-full-access',
+): 'read-only' | 'workspace-write' | 'danger-full-access' {
+  if (preset === undefined) return fallback
+  if (preset === 'lark-readonly') return 'read-only'
+  if (preset === 'lark-workspace') return 'workspace-write'
+  throw new Error(`CLI runtime cannot enforce preset ${JSON.stringify(preset)}`)
+}
+
 export function buildCodexExecArgs(input: {
   cwd: string
   sandbox: 'read-only' | 'workspace-write' | 'danger-full-access'
@@ -277,6 +342,37 @@ export function buildCodexExecArgs(input: {
     return ['exec', ...globalFlags, 'resume', '--json', input.threadId, '-']
   }
   return ['exec', '--json', ...globalFlags, '-']
+}
+
+/** Consume newline-delimited JSON with a hard per-line cap. */
+function consumeBoundedJsonl(
+  stream: NodeJS.ReadableStream,
+  onLine: (line: string) => void,
+  onError: (error: Error) => void,
+): void {
+  let buffer = ''
+  let failed = false
+  stream.on('data', chunk => {
+    if (failed) return
+    buffer += chunk.toString('utf8')
+    if (Buffer.byteLength(buffer) > MAX_JSONL_LINE_BYTES && !buffer.includes('\n')) {
+      failed = true
+      onError(new Error(`CLI emitted a JSONL line larger than ${MAX_JSONL_LINE_BYTES} bytes`))
+      return
+    }
+    for (;;) {
+      const newline = buffer.indexOf('\n')
+      if (newline < 0) break
+      const line = buffer.slice(0, newline).trim()
+      buffer = buffer.slice(newline + 1)
+      if (Buffer.byteLength(line) > MAX_JSONL_LINE_BYTES) {
+        failed = true
+        onError(new Error(`CLI emitted a JSONL line larger than ${MAX_JSONL_LINE_BYTES} bytes`))
+        return
+      }
+      if (line) onLine(line)
+    }
+  })
 }
 
 /** Locate an executable on PATH without spawning a shell. */
@@ -329,7 +425,7 @@ async function killChild(child: ChildProcess | undefined): Promise<void> {
   })
 }
 
-/** Detect Codex-family CLI runtimes present on PATH. Claude is listed, not spawned here. */
+/** Detect the supported Codex-family CLI runtimes present on PATH. */
 export function detectCliAdapters(env: NodeJS.ProcessEnv = process.env): CliSpawnAdapter[] {
   const specs: Array<{ runtime: RuntimeDescriptor; command: string }> = [
     { runtime: TRAEX_RUNTIME, command: env.LARK_BRIDGE_TRAEX_BIN ?? env.LARK_CHANNEL_TRAE_BIN ?? 'traex' },

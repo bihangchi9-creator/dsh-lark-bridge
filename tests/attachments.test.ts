@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -48,6 +48,31 @@ describe('downloadAttachments', () => {
       },
     }
   }
+
+  it('refuses a symlinked attachment root instead of writing outside the workspace', async () => {
+    const parent = tmpDir()
+    const outside = tmpDir()
+    const link = join(parent, 'attachments-link')
+    symlinkSync(outside, link)
+    const result = await downloadAttachments(fakeChannel(), 'om_link', [
+      { type: 'file', fileKey: 'fk', fileName: 'escape.txt' },
+    ], link)
+    expect(result.accepted).toHaveLength(0)
+    expect(result.rejected[0]?.reason).toContain('不安全')
+    expect(existsSync(join(outside, 'om_link', 'escape.txt'))).toBe(false)
+  })
+
+  it('rejects an attachment path reached through a symlinked workspace parent', async () => {
+    const configuredRoot = tmpDir()
+    const outside = tmpDir()
+    const linkedWorkspace = join(configuredRoot, 'workspace')
+    symlinkSync(outside, linkedWorkspace)
+    const result = await downloadAttachments(fakeChannel(), 'om_parent', [
+      { type: 'file', fileKey: 'fk', fileName: 'escape.txt' },
+    ], join(linkedWorkspace, '.attachments'), configuredRoot)
+    expect(result.accepted).toHaveLength(0)
+    expect(result.rejected[0]?.reason).toContain('不安全')
+  })
 
   it('downloads images and files into the target dir', async () => {
     const dir = tmpDir()
