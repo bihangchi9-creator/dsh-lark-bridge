@@ -10,5 +10,5 @@
 
 - insert:
     - id: lark-bridge
-      name: lark-agent-bridge
+      name: "@bihangchi9/lark-agent-bridge"
       inject: [agents]

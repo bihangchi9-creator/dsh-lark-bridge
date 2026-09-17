@@ -1,5 +1,5 @@
 {
-  "name": "lark-agent-bridge",
+  "name": "@bihangchi9/lark-agent-bridge",
   "version": "0.0.1",
   "description": "Feishu/Lark bridge for local coding agents — one group, one conversation, one pinned runtime. Bridges dsh, CLI agents (traex/codex), an IDE window, or a custom agent behind one gateway.",
   "type": "module",
@@ -80,5 +80,16 @@
     "@types/qrcode-terminal": "^0.12.2",
     "typescript": "^5.6.3",
     "vitest": "^4.1.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bihangchi9-creator/dsh-lark-bridge.git"
+  },
+  "homepage": "https://github.com/bihangchi9-creator/dsh-lark-bridge#readme",
+  "bugs": {
+    "url": "https://github.com/bihangchi9-creator/dsh-lark-bridge/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

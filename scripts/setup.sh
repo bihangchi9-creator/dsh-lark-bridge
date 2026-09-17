@@ -126,8 +126,8 @@ if [ -n "$DSH_BIN" ]; then
 else
   # Manual fallback (no `dsh` on PATH): create links for both packages and
   # record both dependencies. Only the bridge belongs in bundles.
-  mkdir -p "$PROFILE_DIR/node_modules"
-  LINK="$PROFILE_DIR/node_modules/lark-agent-bridge"
+  mkdir -p "$PROFILE_DIR/node_modules/@bihangchi9"
+  LINK="$PROFILE_DIR/node_modules/@bihangchi9/lark-agent-bridge"
   if [ -e "$LINK" ] && [ ! -L "$LINK" ]; then
     echo "ERROR: $LINK exists and is not a symlink — remove it first." >&2
     exit 1
@@ -144,14 +144,14 @@ const fs = require('fs')
 const [path, bridgeDir, toolDir] = process.argv.slice(2)
 const pkg = JSON.parse(fs.readFileSync(path, 'utf8'))
 pkg.dependencies ??= {}
-pkg.dependencies['lark-agent-bridge'] = `link:${bridgeDir}`
+pkg.dependencies['@bihangchi9/lark-agent-bridge'] = `link:${bridgeDir}`
 pkg.dependencies['dsh-tool-lark-cli'] = `link:${toolDir}`
 pkg.dsh ??= {}
 pkg.dsh.profile ??= {}
 const bundles = pkg.dsh.profile.bundles ?? []
-pkg.dsh.profile.bundles = bundles.includes('lark-agent-bridge')
+pkg.dsh.profile.bundles = bundles.includes('@bihangchi9/lark-agent-bridge')
   ? bundles
-  : [...bundles, 'lark-agent-bridge']
+  : [...bundles, '@bihangchi9/lark-agent-bridge']
 fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n')
 console.log('==> registered bridge + workspace tool in ' + path)
 EOF
@@ -163,12 +163,12 @@ fi
 const fs = require('fs')
 const path = require('path')
 const [profileDir, manifest] = process.argv.slice(2)
-for (const pkg of ['lark-agent-bridge', 'dsh-tool-lark-cli']) {
+for (const pkg of ['@bihangchi9/lark-agent-bridge', 'dsh-tool-lark-cli']) {
   const entry = path.join(profileDir, 'node_modules', pkg, 'lib', 'index.js')
   if (!fs.existsSync(entry)) throw new Error(`installation incomplete: ${entry} is missing`)
 }
 const data = JSON.parse(fs.readFileSync(manifest, 'utf8'))
-if (!data.dsh?.profile?.bundles?.includes('lark-agent-bridge')) {
+if (!data.dsh?.profile?.bundles?.includes('@bihangchi9/lark-agent-bridge')) {
   throw new Error('installation incomplete: lark-agent-bridge is not registered as a bundle')
 }
 console.log('==> verified bridge bundle + dsh-tool-lark-cli dependency')

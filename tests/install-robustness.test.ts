@@ -44,6 +44,7 @@ describe('install robustness — complete workspace tier delivery', () => {
     const windows = readFileSync(`${root}/scripts/setup.ps1`, 'utf8')
     for (const script of [unix, windows]) {
       expect(script).toContain('dsh-tool-lark-cli')
+      expect(script).toContain('@bihangchi9/lark-agent-bridge')
       expect(script.replaceAll('\\', '/')).toContain('tools/lark-cli')
       expect(script).toContain('installation incomplete')
     }

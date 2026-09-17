@@ -70,7 +70,7 @@ Independent of dsh and of any IDE window.
 1. `pnpm install && pnpm build`
 2. Put `traex` and/or `codex` on PATH (or set `LARK_BRIDGE_TRAEX_BIN` /
    `LARK_BRIDGE_CODEX_BIN`).
-3. `node lib/daemon.js` (or `npx lark-agent-bridge` after install).
+3. `node lib/daemon.js` (or `npx @bihangchi9/lark-agent-bridge` after install).
 4. Optional: `LARK_BRIDGE_RUNTIME=traex` to choose the default pin.
 5. Same QR wizard as the plugin if credentials are missing.
 

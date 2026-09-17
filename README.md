@@ -1,6 +1,6 @@
 # Lark Agent Bridge
 
-<sub>npm package: `lark-agent-bridge` · git repo: `dsh-lark-bridge` (repo name kept; clone paths below are unchanged)</sub>
+<sub>npm package: `@bihangchi9/lark-agent-bridge` · git repo: `dsh-lark-bridge` (repo name kept; clone paths below are unchanged)</sub>
 
 > A Feishu / Lark bridge for local coding agents — *one group, one conversation, one pinned runtime*. Bridges **dsh** (in-process plugin), **CLI** agents (`traex` / `codex`, spawned by a daemon), an **IDE** window (attached over a socket), or a **custom** agent — behind one gateway.
 
@@ -111,8 +111,8 @@ dsh plugin --profile web add link:/path/to/dsh-lark-bridge
 `dsh plugin` runs `pnpm add` in the profile directory and **auto-reconciles
 `dsh.profile.bundles`**: a package that declares `dsh.bundle` joins the layer
 stack automatically. Remove/update with the same family:
-`dsh plugin --profile web remove lark-agent-bridge` /
-`dsh plugin --profile web update lark-agent-bridge`.
+`dsh plugin --profile web remove @bihangchi9/lark-agent-bridge` /
+`dsh plugin --profile web update @bihangchi9/lark-agent-bridge`.
 
 > ⚠️ A `link:` install points the profile dependency at THIS directory. If you
 > later move or delete it, the next `dsh web` cannot resolve the bundle and
@@ -135,13 +135,14 @@ Then register it as a dsh **bundle** (once it's in the profile, `dsh web` loads 
 ```bash
 # 2. Link it into the profile's node_modules (bundle resolution anchor)
 #    macOS / Linux:
-mkdir -p ~/.dsh/profiles/web/node_modules
-ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/dsh-lark-bridge
+mkdir -p ~/.dsh/profiles/web/node_modules/@bihangchi9
+ln -s "$(pwd)" ~/.dsh/profiles/web/node_modules/@bihangchi9/lark-agent-bridge
 #    Windows PowerShell (directory junction — no admin rights needed):
-#    New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\web\node_modules\dsh-lark-bridge" -Target (Get-Location).Path
+#    New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.dsh\profiles\web\node_modules\@bihangchi9"
+#    New-Item -ItemType Junction -Path "$env:USERPROFILE\.dsh\profiles\web\node_modules\@bihangchi9\lark-agent-bridge" -Target (Get-Location).Path
 
 # 3. Append the package name to dsh.profile.bundles in ~/.dsh/profiles/web/package.json:
-#    "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "lark-agent-bridge"]
+#    "bundles": ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-web-app", "@bihangchi9/lark-agent-bridge"]
 ```
 
 Launch dsh (the bundle loads the plugin automatically):
@@ -313,7 +314,7 @@ If you already use [`lark-cli`](https://github.com/larksuite/cli) / the Lark ski
 
 ## Credits
 
-**Lark Agent Bridge** (npm `lark-agent-bridge`, repo `dsh-lark-bridge`) is a creative extension of [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge) (originally `feishu-claude-code-bridge`) by [zarazhangrui](https://github.com/zarazhangrui), by way of [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark). This project is a native DeepSeek Harness plugin reimplementation. All original work remains under its MIT license; see [LICENSE](./LICENSE) and [NOTICE](./NOTICE) for the full copyright chain.
+**Lark Agent Bridge** (npm `@bihangchi9/lark-agent-bridge`, repo `dsh-lark-bridge`) is a creative extension of [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge) (originally `feishu-claude-code-bridge`) by [zarazhangrui](https://github.com/zarazhangrui), by way of [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark). This project is a native DeepSeek Harness plugin reimplementation. All original work remains under its MIT license; see [LICENSE](./LICENSE) and [NOTICE](./NOTICE) for the full copyright chain.
 
 ## License
 

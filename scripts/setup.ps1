@@ -23,7 +23,7 @@ $DshHome = if ($env:DSH_HOME) { $env:DSH_HOME } else { Join-Path $HOME '.dsh' }
 $Profile = if ($env:DSH_PROFILE) { $env:DSH_PROFILE } else { 'web' }
 $ProfileDir = Join-Path $DshHome (Join-Path 'profiles' $Profile)
 $Manifest = Join-Path $ProfileDir 'package.json'
-$Link = Join-Path $ProfileDir (Join-Path 'node_modules' 'lark-agent-bridge')
+$Link = Join-Path $ProfileDir (Join-Path 'node_modules' '@bihangchi9/lark-agent-bridge')
 $LarkToolLink = Join-Path $ProfileDir (Join-Path 'node_modules' 'dsh-tool-lark-cli')
 
 Write-Host '==> lark-agent-bridge setup'
@@ -173,7 +173,7 @@ else {
     if ($null -eq $pkg.dependencies) {
         $pkg | Add-Member -NotePropertyName 'dependencies' -NotePropertyValue ([pscustomobject]@{})
     }
-    $pkg.dependencies | Add-Member -NotePropertyName 'lark-agent-bridge' -NotePropertyValue "link:$ProjectDir" -Force
+    $pkg.dependencies | Add-Member -NotePropertyName '@bihangchi9/lark-agent-bridge' -NotePropertyValue "link:$ProjectDir" -Force
     $pkg.dependencies | Add-Member -NotePropertyName 'dsh-tool-lark-cli' -NotePropertyValue "link:$LarkToolDir" -Force
     if ($null -eq $pkg.dsh) {
         $pkg | Add-Member -NotePropertyName 'dsh' -NotePropertyValue ([pscustomobject]@{})
@@ -182,8 +182,8 @@ else {
         $pkg.dsh | Add-Member -NotePropertyName 'profile' -NotePropertyValue ([pscustomobject]@{})
     }
     $bundles = @($pkg.dsh.profile.bundles)
-    if ($bundles -notcontains 'lark-agent-bridge') {
-        $pkg.dsh.profile | Add-Member -NotePropertyName 'bundles' -NotePropertyValue @($bundles + 'lark-agent-bridge') -Force
+    if ($bundles -notcontains '@bihangchi9/lark-agent-bridge') {
+        $pkg.dsh.profile | Add-Member -NotePropertyName 'bundles' -NotePropertyValue @($bundles + '@bihangchi9/lark-agent-bridge') -Force
     }
     $json = $pkg | ConvertTo-Json -Depth 10
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -201,7 +201,7 @@ foreach ($entry in @(
     }
 }
 $check = Get-Content $Manifest -Raw | ConvertFrom-Json
-if (@($check.dsh.profile.bundles) -notcontains 'lark-agent-bridge') {
+if (@($check.dsh.profile.bundles) -notcontains '@bihangchi9/lark-agent-bridge') {
     Write-Error 'installation incomplete: lark-agent-bridge is not registered as a bundle'
     exit 1
 }
