@@ -62,9 +62,53 @@ CLI **spawn** 二进制；IDE **attach** 当前用户拥有且组/其他用户�
 
 ## 安装
 
-> **先构建。** 本仓库只提供 TypeScript 源码，编译产物 `lib/` 被 git 忽略——**全新 clone 没有构建产物**。插件入口是 `lib/index.js`，不构建就安装会让 dsh 拿到一个空包、**宿主加载失败**。`pnpm setup` 会替你构建；手动安装则必须先 `pnpm install && pnpm build`。
+### 方式一：npm 包（普通用户推荐）
 
-### 方式一：一键脚本（推荐）
+已发布的 npm 包包含编译后的 JavaScript、两个权限档位 preset、内置 `dsh-tool-lark-cli` 包和安装脚本。请安装在一个**稳定目录**中：注册 bundle 时 dsh 会链接到这个位置。
+
+```bash
+# macOS / Linux
+mkdir -p ~/lark-agent-bridge && cd ~/lark-agent-bridge
+npm init -y
+npm install @bihangchi9/lark-agent-bridge
+bash node_modules/@bihangchi9/lark-agent-bridge/scripts/setup.sh
+```
+
+```powershell
+# Windows PowerShell
+New-Item -ItemType Directory -Force -Path "$HOME\lark-agent-bridge" | Out-Null
+cd "$HOME\lark-agent-bridge"
+npm init -y
+npm install "@bihangchi9/lark-agent-bridge"
+powershell -ExecutionPolicy Bypass -File node_modules\@bihangchi9\lark-agent-bridge\scripts\setup.ps1
+```
+
+脚本会预检 Node、安装 `lark-workspace` / `lark-readonly` preset，并注册 bridge bundle 及其 `dsh-tool-lark-cli` 依赖。当 `dsh` 命令可用时，脚本直接走官方 `dsh plugin`，它会**自动初始化尚不存在的 `web` / `headless` profile**。安装完成后直接启动即可，**不需要 `--patch` 参数**：
+
+```bash
+# macOS / Linux
+DSH_PERMISSION_MODE=danger-full-access dsh web
+
+# Windows PowerShell
+$env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
+```
+
+换 profile / 自定义 dsh 目录：
+
+```bash
+DSH_PROFILE=headless DSH_HOME=/path/.dsh bash node_modules/@bihangchi9/lark-agent-bridge/scripts/setup.sh
+```
+
+如果只使用独立 CLI daemon，不需要注册 dsh profile：
+
+```bash
+npx -p @bihangchi9/lark-agent-bridge lark-agent-register
+npx -p @bihangchi9/lark-agent-bridge lark-agent-bridge
+```
+
+### 方式二：源码一键安装（贡献者）
+
+> **先构建。** Git 仓库只提供 TypeScript 源码，编译产物 `lib/` 被 git 忽略——**全新 clone 没有构建产物**。插件入口是 `lib/index.js`，不构建就注册会让 dsh 拿到一个空包、**宿主加载失败**。`pnpm setup` 会替你构建。
 
 ```bash
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
@@ -86,7 +130,7 @@ $env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 
 > 换 profile：`DSH_PROFILE=headless pnpm setup`；自定义 dsh 目录：`DSH_HOME=/path/.dsh pnpm setup`（Windows 同样支持这两个环境变量）。如果系统里找不到 `dsh` 命令，脚本只能走手动 fallback，此时要求目标 profile 已经初始化；若不存在，脚本会在构建和复制 preset 之前退出，不留下半安装状态。
 
-### 方式二：dsh 官方命令（务必先构建！）
+### 方式三：从源码使用 dsh 官方命令（务必先构建！）
 
 ```bash
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
@@ -100,9 +144,9 @@ dsh plugin --profile web add link:/path/to/dsh-lark-bridge
 
 > ⚠️ `link:` 安装会把 profile 依赖指向**本目录**。之后若移动或删除本目录，下次 `dsh web` 无法解析 bundle 而**启动失败**。请保持 clone 位置不变，或改用方式一。
 
-### 方式三：手动安装（源码模式）
+### 方式四：手动源码安装（贡献者 / 离线 fallback）
 
-由于 dsh 的公开 npm 依赖图还不完整，建议以「源码模式」和你的 dsh 代码库放在一起安装。
+仅在 npm 安装脚本和官方 `dsh plugin` 命令都不适用时使用，需要和你的 dsh 代码库放在一起安装。
 
 ```bash
 # 1. 克隆到 dsh 代码库旁边，安装并构建
@@ -140,7 +184,8 @@ DSH_PERMISSION_MODE=danger-full-access dsh web
 
 | 事项 | macOS / Linux | Windows |
 |---|---|---|
-| 一键安装 | `pnpm setup`（`scripts/setup.sh`） | `pnpm setup:win`（`scripts/setup.ps1`） |
+| npm 安装（用户） | `bash node_modules/@bihangchi9/lark-agent-bridge/scripts/setup.sh` | `powershell -ExecutionPolicy Bypass -File node_modules\@bihangchi9\lark-agent-bridge\scripts\setup.ps1` |
+| 源码安装（贡献者） | `pnpm setup`（`scripts/setup.sh`） | `pnpm setup:win`（`scripts/setup.ps1`） |
 | dsh 主目录 | `~/.dsh`（即 `$HOME/.dsh`） | `%USERPROFILE%\.dsh` |
 | 目录链接 | `ln -s`（符号链接） | `New-Item -ItemType Junction`（目录联接，**无需管理员权限**） |
 | 环境变量写法 | `DSH_PERMISSION_MODE=danger-full-access dsh web` | PowerShell：`$env:DSH_PERMISSION_MODE="danger-full-access"; dsh web`；cmd：`set DSH_PERMISSION_MODE=danger-full-access && dsh web` |
@@ -148,7 +193,7 @@ DSH_PERMISSION_MODE=danger-full-access dsh web
 | 后台常驻 | `launchd`（macOS）/ `systemd`（Linux） | 任务计划程序（`schtasks`） |
 | 扫码注册 / 构建 / 聊天命令 | 全平台一致 | 同左 |
 
-> 两个安装脚本行为完全一致且幂等：预检 → 构建 → 链接 → 注册 bundle。
+> 两个安装脚本均幂等。npm 包路径为：预检 → 复制 preset → 链接/注册 bundle；源码路径额外包含构建步骤。
 
 ## 首次运行：注册你的机器人
 
@@ -164,7 +209,8 @@ DSH_PERMISSION_MODE=danger-full-access dsh web
 想手动做 / 重新注册 / 换账号？跑独立向导：
 
 ```bash
-pnpm register           # 或: npx lark-agent-register
+pnpm register           # 源码仓库
+npx -p @bihangchi9/lark-agent-bridge lark-agent-register   # npm 包
 ```
 
 已经有凭证了？直接用环境变量跳过向导：

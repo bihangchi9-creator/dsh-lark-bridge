@@ -51,8 +51,11 @@ never broadcast.
 Treat dsh as a **plugin**, not a second daemon.
 
 1. Confirm Node `^22.19.0 || >=24.0.0` and a dsh checkout / `dsh` on PATH.
-2. From this repo: `pnpm setup` (or `pnpm install && pnpm build`, then
-   `dsh plugin --profile web add link:$PWD`).
+2. Install the released package in a stable directory and register it:
+   `npm install @bihangchi9/lark-agent-bridge`, then run
+   `node_modules/@bihangchi9/lark-agent-bridge/scripts/setup.sh`
+   (Windows: `scripts/setup.ps1`).
+   Contributors can instead run `pnpm setup` from this source checkout.
 3. Launch: `DSH_PERMISSION_MODE=danger-full-access dsh web`.
 4. First run without credentials opens the QR wizard. Scan with Feishu.
 5. In chat: `/help`, `/new`, `/where`, `/models`, `/whoami`. Owner:
@@ -67,10 +70,12 @@ disappears stays pinned and the turn fails closed.
 
 Independent of dsh and of any IDE window.
 
-1. `pnpm install && pnpm build`
+1. Install from npm: `npm install @bihangchi9/lark-agent-bridge`
+   (contributors: `pnpm install && pnpm build` from this checkout).
 2. Put `traex` and/or `codex` on PATH (or set `LARK_BRIDGE_TRAEX_BIN` /
    `LARK_BRIDGE_CODEX_BIN`).
-3. `node lib/daemon.js` (or `npx @bihangchi9/lark-agent-bridge` after install).
+3. Run `node node_modules/@bihangchi9/lark-agent-bridge/lib/daemon.js`
+   (or `npx -p @bihangchi9/lark-agent-bridge lark-agent-bridge`).
 4. Optional: `LARK_BRIDGE_RUNTIME=traex` to choose the default pin.
 5. Same QR wizard as the plugin if credentials are missing.
 

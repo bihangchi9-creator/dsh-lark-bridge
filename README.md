@@ -62,13 +62,64 @@ ByteDance-only overlay (SSO, bytecli, extra presets) lives in a local `internal/
 
 ## Install
 
-> **Build first.** This repo ships TypeScript source; the compiled `lib/` is
-> git-ignored, so a fresh clone has NO build output. The plugin's entry is
-> `lib/index.js`, so installing without building gives dsh an empty package
-> and **the host fails to load it**. `pnpm setup` builds for you; if you
-> install manually, run `pnpm install && pnpm build` first.
+### Option 1: npm package (recommended for users)
 
-### Option 1: one-command setup (recommended)
+The released package contains compiled JavaScript, both access-tier presets,
+the bundled `dsh-tool-lark-cli` package, and the setup scripts. Install it in
+a **stable directory** — dsh links to that location when registering the
+bundle.
+
+```bash
+# macOS / Linux
+mkdir -p ~/lark-agent-bridge && cd ~/lark-agent-bridge
+npm init -y
+npm install @bihangchi9/lark-agent-bridge
+bash node_modules/@bihangchi9/lark-agent-bridge/scripts/setup.sh
+```
+
+```powershell
+# Windows PowerShell
+New-Item -ItemType Directory -Force -Path "$HOME\lark-agent-bridge" | Out-Null
+cd "$HOME\lark-agent-bridge"
+npm init -y
+npm install "@bihangchi9/lark-agent-bridge"
+powershell -ExecutionPolicy Bypass -File node_modules\@bihangchi9\lark-agent-bridge\scripts\setup.ps1
+```
+
+The script preflights Node, installs the `lark-workspace` / `lark-readonly`
+presets, and registers both the bridge bundle and its `dsh-tool-lark-cli`
+dependency. When `dsh` is available it uses the official `dsh plugin` command,
+which **initializes a missing `web` or `headless` profile automatically**.
+After setup, launch dsh with **no `--patch` flag**:
+
+```bash
+# macOS / Linux
+DSH_PERMISSION_MODE=danger-full-access dsh web
+
+# Windows PowerShell
+$env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
+```
+
+Different profile / dsh home:
+
+```bash
+DSH_PROFILE=headless DSH_HOME=/path/.dsh bash node_modules/@bihangchi9/lark-agent-bridge/scripts/setup.sh
+```
+
+For the standalone CLI daemon only, a dsh profile is not required:
+
+```bash
+npx -p @bihangchi9/lark-agent-bridge lark-agent-register
+npx -p @bihangchi9/lark-agent-bridge lark-agent-bridge
+```
+
+### Option 2: source checkout one-command setup (contributors)
+
+> **Build first.** Git contains TypeScript source, while compiled `lib/` is
+> git-ignored. A fresh source checkout therefore has no build output; the
+> plugin entry is `lib/index.js`, so registering it without building gives dsh
+> an empty package and **the host fails to load it**. `pnpm setup` builds for
+> you.
 
 ```bash
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
@@ -98,7 +149,7 @@ $env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 > therefore requires an already-initialized profile; it fails before building
 > or copying presets, so it leaves no partial installation.
 
-### Option 2: official `dsh plugin` command (build first!)
+### Option 3: official `dsh plugin` command from source (build first!)
 
 ```bash
 git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
@@ -118,9 +169,10 @@ stack automatically. Remove/update with the same family:
 > later move or delete it, the next `dsh web` cannot resolve the bundle and
 > fails to boot. Keep the clone in place, or use Option 1.
 
-### Option 3: manual install (source mode)
+### Option 4: manual install from source (contributors / offline fallback)
 
-Because the dsh public npm graph is still partial, install from source alongside your dsh checkout.
+Use this only when neither the npm setup script nor the official `dsh plugin`
+command fits. It installs from source alongside your dsh checkout.
 
 ```bash
 # 1. Clone next to your dsh checkout; install & build
@@ -158,7 +210,8 @@ DSH_PERMISSION_MODE=danger-full-access dsh web
 
 | Item | macOS / Linux | Windows |
 |---|---|---|
-| One-command setup | `pnpm setup` (`scripts/setup.sh`) | `pnpm setup:win` (`scripts/setup.ps1`) |
+| npm setup (users) | `bash node_modules/@bihangchi9/lark-agent-bridge/scripts/setup.sh` | `powershell -ExecutionPolicy Bypass -File node_modules\@bihangchi9\lark-agent-bridge\scripts\setup.ps1` |
+| Source setup (contributors) | `pnpm setup` (`scripts/setup.sh`) | `pnpm setup:win` (`scripts/setup.ps1`) |
 | dsh home directory | `~/.dsh` (i.e. `$HOME/.dsh`) | `%USERPROFILE%\.dsh` |
 | Directory link | `ln -s` (symlink) | `New-Item -ItemType Junction` (junction — **no admin rights needed**) |
 | Env var syntax | `DSH_PERMISSION_MODE=danger-full-access dsh web` | PowerShell: `$env:DSH_PERMISSION_MODE="danger-full-access"; dsh web`; cmd: `set DSH_PERMISSION_MODE=danger-full-access && dsh web` |
@@ -182,7 +235,8 @@ On the first launch with no credentials, the plugin prints a **QR code** in the 
 Prefer to do it manually / re-register / switch accounts? Run the standalone wizard:
 
 ```bash
-pnpm register           # or: npx lark-agent-register
+pnpm register           # source checkout
+npx -p @bihangchi9/lark-agent-bridge lark-agent-register   # npm package
 ```
 
 Already have credentials? Skip the wizard entirely by exporting them:
