@@ -1,6 +1,6 @@
 # Lark Agent Bridge
 
-<sub>npm package: `@bihangchi9/lark-agent-bridge` · git repo: `dsh-lark-bridge` (repo name kept; clone paths below are unchanged)</sub>
+<sub>npm package: `@bihangchi9/lark-agent-bridge` · git repo: `lark-agent-bridge`</sub>
 
 > A Feishu / Lark bridge for local coding agents — *one group, one conversation, one pinned runtime*. Bridges **dsh** (in-process plugin), **CLI** agents (`traex` / `codex`, spawned by a daemon), an **IDE** window (attached over a socket), or a **custom** agent — behind one gateway.
 
@@ -122,8 +122,8 @@ npx -p @bihangchi9/lark-agent-bridge lark-agent-bridge
 > you.
 
 ```bash
-git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
-cd dsh-lark-bridge
+git clone https://github.com/bihangchi9-creator/lark-agent-bridge.git
+cd lark-agent-bridge
 pnpm setup            # macOS / Linux (scripts/setup.sh) — builds, links, registers
 pnpm setup:win        # Windows (scripts/setup.ps1)
 ```
@@ -152,11 +152,11 @@ $env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 ### Option 3: official `dsh plugin` command from source (build first!)
 
 ```bash
-git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
-cd dsh-lark-bridge
+git clone https://github.com/bihangchi9-creator/lark-agent-bridge.git
+cd lark-agent-bridge
 pnpm install && pnpm build          # REQUIRED — link installs pull lib/ from this dir
 # then, from your dsh checkout:
-dsh plugin --profile web add link:/path/to/dsh-lark-bridge
+dsh plugin --profile web add link:/path/to/lark-agent-bridge
 ```
 
 `dsh plugin` runs `pnpm add` in the profile directory and **auto-reconciles
@@ -176,8 +176,8 @@ command fits. It installs from source alongside your dsh checkout.
 
 ```bash
 # 1. Clone next to your dsh checkout; install & build
-git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
-cd dsh-lark-bridge
+git clone https://github.com/bihangchi9-creator/lark-agent-bridge.git
+cd lark-agent-bridge
 pnpm install
 pnpm build            # compiles src/ -> lib/  (REQUIRED before the plugin can load)
 ```
@@ -368,7 +368,7 @@ If you already use [`lark-cli`](https://github.com/larksuite/cli) / the Lark ski
 
 ## Credits
 
-**Lark Agent Bridge** (npm `@bihangchi9/lark-agent-bridge`, repo `dsh-lark-bridge`) is a creative extension of [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge) (originally `feishu-claude-code-bridge`) by [zarazhangrui](https://github.com/zarazhangrui), by way of [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark). This project is a native DeepSeek Harness plugin reimplementation. All original work remains under its MIT license; see [LICENSE](./LICENSE) and [NOTICE](./NOTICE) for the full copyright chain.
+**Lark Agent Bridge** (npm `@bihangchi9/lark-agent-bridge`, repo `lark-agent-bridge`) is a creative extension of [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge) (originally `feishu-claude-code-bridge`) by [zarazhangrui](https://github.com/zarazhangrui), by way of [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark). This project is a native DeepSeek Harness plugin reimplementation. All original work remains under its MIT license; see [LICENSE](./LICENSE) and [NOTICE](./NOTICE) for the full copyright chain.
 
 ## License
 

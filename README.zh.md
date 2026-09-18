@@ -1,6 +1,6 @@
 # Lark Agent Bridge
 
-<sub>npm 包：`@bihangchi9/lark-agent-bridge` · git 仓库：`dsh-lark-bridge`（仓库名沿用，下方克隆路径不变）</sub>
+<sub>npm 包：`@bihangchi9/lark-agent-bridge` · git 仓库：`lark-agent-bridge`</sub>
 
 > 把本地编码智能体接到**飞书 / Lark 群聊**——*一个群，一段对话，一条钉死的运行时*。可桥接 **dsh**（进程内插件）、**CLI** 智能体（`traex` / `codex`，由 daemon spawn）、**IDE** 窗口（socket attach）或**自研** agent，统一走一个网关。
 
@@ -111,8 +111,8 @@ npx -p @bihangchi9/lark-agent-bridge lark-agent-bridge
 > **先构建。** Git 仓库只提供 TypeScript 源码，编译产物 `lib/` 被 git 忽略——**全新 clone 没有构建产物**。插件入口是 `lib/index.js`，不构建就注册会让 dsh 拿到一个空包、**宿主加载失败**。`pnpm setup` 会替你构建。
 
 ```bash
-git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
-cd dsh-lark-bridge
+git clone https://github.com/bihangchi9-creator/lark-agent-bridge.git
+cd lark-agent-bridge
 pnpm setup            # macOS / Linux（scripts/setup.sh）——构建 + 链接 + 注册
 pnpm setup:win        # Windows（scripts/setup.ps1）
 ```
@@ -133,11 +133,11 @@ $env:DSH_PERMISSION_MODE = "danger-full-access"; dsh web
 ### 方式三：从源码使用 dsh 官方命令（务必先构建！）
 
 ```bash
-git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
-cd dsh-lark-bridge
+git clone https://github.com/bihangchi9-creator/lark-agent-bridge.git
+cd lark-agent-bridge
 pnpm install && pnpm build          # 必需——link 安装会从本目录拉取 lib/
 # 然后从你的 dsh 代码库目录执行：
-dsh plugin --profile web add link:/path/to/dsh-lark-bridge
+dsh plugin --profile web add link:/path/to/lark-agent-bridge
 ```
 
 `dsh plugin` 会在 profile 目录里执行 `pnpm add`，并**自动把声明了 `dsh.bundle` 的包加进 `dsh.profile.bundles`**。卸载/升级同样是官方命令：`dsh plugin --profile web remove @bihangchi9/lark-agent-bridge` / `dsh plugin --profile web update @bihangchi9/lark-agent-bridge`。
@@ -150,8 +150,8 @@ dsh plugin --profile web add link:/path/to/dsh-lark-bridge
 
 ```bash
 # 1. 克隆到 dsh 代码库旁边，安装并构建
-git clone https://github.com/bihangchi9-creator/dsh-lark-bridge.git
-cd dsh-lark-bridge
+git clone https://github.com/bihangchi9-creator/lark-agent-bridge.git
+cd lark-agent-bridge
 pnpm install
 pnpm build            # 把 src/ 编译到 lib/（插件加载前必需）
 ```
@@ -323,7 +323,7 @@ cp -r presets/lark-workspace presets/lark-readonly ~/.dsh/.agent-presets/
 
 ## 致谢
 
-**Lark Agent Bridge**（npm `@bihangchi9/lark-agent-bridge`，仓库 `dsh-lark-bridge`）是对 [zarazhangrui](https://github.com/zarazhangrui) 的 [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge)（最初名为 `feishu-claude-code-bridge`）的二创，经由 [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark) 演化而来。本项目是一个 dsh 原生插件的从零重写。所有原始工作仍遵循其 MIT 许可；完整的版权链见 [LICENSE](./LICENSE) 与 [NOTICE](./NOTICE)。
+**Lark Agent Bridge**（npm `@bihangchi9/lark-agent-bridge`，仓库 `lark-agent-bridge`）是对 [zarazhangrui](https://github.com/zarazhangrui) 的 [lark-coding-agent-bridge](https://github.com/zarazhangrui/lark-coding-agent-bridge)（最初名为 `feishu-claude-code-bridge`）的二创，经由 [trae-to-lark](https://github.com/bihangchi9-creator/trae-to-lark) 演化而来。本项目是一个 dsh 原生插件的从零重写。所有原始工作仍遵循其 MIT 许可；完整的版权链见 [LICENSE](./LICENSE) 与 [NOTICE](./NOTICE)。
 
 ## 许可
 
